@@ -161,3 +161,17 @@ test('a background skill ends at its last SubagentStop and shows that result', (
     assert.doesNotMatch(renderTree([record]), /Running in the background/, `${label}, still running`);
   }
 });
+
+test('a background context shows what it handed back, not a later remark', () => {
+  const at = (s) => `2026-11-15T17:${s}.000Z`;
+  const base = { v: 2, harness: 'claude', session: 's' };
+  const records = [
+    { ...base, at: at('57:16'), tool_use_id: 't1', tool: 'Agent', name: 'process-story', duration_ms: 25, ok: true, child_agent_id: 'a1', background: true },
+    { ...base, at: at('58:18'), agent_id: 'a1', tool_use_id: 't2', tool: 'SubagentHandback', duration_ms: 7, ok: true, result: 'Both verdicts are PASS.' },
+    { ...base, at: at('58:18'), event: 'SubagentStop', agent_id: 'a1', agent_type: 'process-story' },
+    { ...base, at: at('58:21'), event: 'SubagentStop', agent_id: 'a1', agent_type: 'process-story', result: 'The completion notice adds nothing new.' },
+  ];
+  const out = renderTree(records);
+  assert.match(out, /65 s .*process-story \(agent\).*background -> Both verdicts are PASS\./);
+  assert.doesNotMatch(out, /adds nothing new/);
+});

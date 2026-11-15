@@ -143,6 +143,14 @@ test('a skill forked in the background records background and no result', () => 
   assert.equal(record.result, undefined, 'the launch notice is not a result');
 });
 
+test('a hand-back records the report as its result', () => {
+  const payload = { session_id: 's', hook_event_name: 'PostToolUse', cwd: '/nonexistent', agent_id: 'a1', tool_use_id: 't', tool_name: 'SubagentHandback',
+    tool_input: { message: 'Both verdicts are PASS.\n\n- details' }, tool_response: [{ type: 'text', text: '{"success":true,"message":"Report delivered to your caller."}' }] };
+  const record = buildRecord(payload, 'claude');
+  assert.equal(record.result, 'Both verdicts are PASS.');
+  assert.equal(record.args, undefined, 'the report is not repeated as args');
+});
+
 test('masks secrets in args, result and secret-looking input keys', () => {
   assert.equal(mask('curl -H "X-Auth: Bearer abcdefghijkl"'), 'curl -H "X-Auth: Bearer [redacted]"');
   assert.doesNotMatch(mask('curl -H "Authorization: Bearer abcdefghijkl"'), /abcdefghijkl/);

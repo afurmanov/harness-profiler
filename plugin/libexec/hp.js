@@ -27,6 +27,7 @@ const DUPLICATE_EVENT_MS = 5000;
 const TRANSCRIPT_TAIL_BYTES = 512 * 1024;
 const ANSI_COLORS = [36, 33, 35, 32, 34, 31];
 const PARENT_TOOLS = ['Skill', 'Agent'];
+const HANDBACK = 'SubagentHandback';
 const DEFAULT_AGENT = 'general-purpose';
 const NAME_LIMIT = 80;
 const ARGS_LIMIT = 200;
@@ -157,6 +158,7 @@ function argsOf(payload) {
     case 'Skill': return input.args;
     case 'Agent': return [input.description, firstLine(input.prompt || '')].filter(Boolean).join(': ');
     case 'Bash': return input.command;
+    case HANDBACK: return undefined;
     default: {
       const safe = {};
       for (const [key, value] of Object.entries(input)) safe[key] = SECRET_KEY.test(key) ? '[redacted]' : value;
@@ -186,8 +188,13 @@ function isBackground(response) {
   return Boolean(response) && (response.status === LAUNCHED || response.background === true);
 }
 
+// A background subagent reports to its caller with a SubagentHandback call:
+//   tool_input     {"message":"Both verdicts are PASS.\n\n- **Implementation:** ..."}
+//   tool_response  "Report delivered to your caller."
+// The stop that follows has an empty last_assistant_message.
 function resultOf(payload) {
   const response = payload.tool_response;
+  if (payload.tool_name === HANDBACK) return firstLine((payload.tool_input || {}).message || '') || undefined;
   if (payload.tool_name === 'Skill' && !(response && response.agentId)) return undefined;
   if (isBackground(response)) return undefined;
   const text = firstLine(responseText(response).replace(TOOLS_USED, '')) || firstLine(payload.error || '');
@@ -463,13 +470,14 @@ function clock(ms) {
 function uniqueCalls(records) {
   const seen = new Set();
   const stops = subagentStops(records);
+  const handbacks = new Map(records.filter((r) => r.tool === HANDBACK && r.agent_id && r.result).map((r) => [r.agent_id, r.result]));
   return records.filter((record) => {
     if (!record.tool) return false;
     if (!record.tool_use_id) return true;
     if (seen.has(record.tool_use_id)) return false;
     seen.add(record.tool_use_id);
     return true;
-  }).map((record) => withStop(record, stops.get(record.child_agent_id)));
+  }).map((record) => withStop(record, stops.get(record.child_agent_id), handbacks.get(record.child_agent_id)));
 }
 
 // A background subagent stops each time it has nothing to do and is woken when
@@ -487,14 +495,18 @@ function subagentStops(records) {
 const LAUNCH_NOTICE = /^Running in the background as @/;
 
 // A background subagent's call returns at once; it ends at its SubagentStop.
-function withStop(record, stop) {
+// Its result is what it handed back. A later notice can wake it once more,
+// and that stop's message is a remark, not the report:
+//   17:58:18  SubagentHandback  "Both verdicts are PASS."
+//   17:58:21  SubagentStop      "The completion notice adds nothing new: ..."
+function withStop(record, stop, handback) {
   const { result, ...launched } = record;
   const call = LAUNCH_NOTICE.test(result || '') ? { ...launched, background: true } : record;
   if (!stop) return call;
   const merged = { ...call, child_agent_type: call.child_agent_type || stop.agent_type };
   if (!call.background) return merged;
   const start = startOf(call);
-  return { ...merged, at: stop.at, duration_ms: Math.max(0, Date.parse(stop.at) - start), result: call.result || stop.result };
+  return { ...merged, at: stop.at, duration_ms: Math.max(0, Date.parse(stop.at) - start), result: handback || call.result || stop.result };
 }
 
 function uniqueEvents(records) {

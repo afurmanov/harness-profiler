@@ -8,7 +8,7 @@ If you built or use a non-trivial Claude Code or Codex setup (skills, subagents,
 - It takes too much time.
 - It eats too many tokens.
 
-harness-profiler shows what your setup does underneath. It records only what Claude Code or Codex itself reports through hooks, and it gives you what a regular profiler does, a call tree with timings and costs.
+harness-profiler shows what your setup does underneath. It records only what Claude Code itself reports through hooks, and it gives you what a regular profiler does, a call tree with timings and costs.
 
 Let's take a small example. An `orchestrator` skill picks up new stories in an epic and starts a `process-story` subagent for each one. That subagent runs the `planner` and `implementor` skills, and `implementor` calls `validator` in a separate context, which returns `PASS` or `FAIL`. When a story passes, `process-story` uses a `github` skill, also in its own context, that writes the pull request description and calls `validator` again to check it.
 
@@ -16,7 +16,7 @@ You might wonder whether `validator` is called at all, and whether it checks the
 
 ![A sequence diagram of one story: orchestrator runs in main and starts process-story; planner and implementor run inline in process-story; validator runs in its own context and returns PASS; then github, forked from process-story, writes the PR description and calls its own validator](e2e/toy/output/trace.png)
 
-It is a UML sequence diagram with one addition: each vertical bar is a context, a conversation history the model reads. `process-story`, `github`, and each `validator` call (skills with `context: fork`) start fresh, so each gets its own color. A subagent that starts with a copy of its caller's history (Claude Code's built-in `fork` agent) keeps the caller's color. To save width, contexts that don't overlap in time share a column: the first `validator` ended before `github` started, so the two sit in one column, and its header has a chip for each in the color of its bar. Diamonds mark skills loaded inline, into the caller's context. Next to each bar are the tokens that context spent. The example is recorded from a real session, described in [e2e/](e2e/README.md).
+It is a UML sequence diagram with one addition: each vertical bar is a context, a conversation history the model reads. `process-story` (a subagent), `github`, and each `validator` call (skills with `context: fork`) start fresh, so each gets its own color. A subagent that starts with a copy of its caller's history (Claude Code's built-in `fork` agent) keeps the caller's color. To save width, contexts that don't overlap in time share a column: the first `validator` ended before `github` started, so the two sit in one column, and its header has a chip for each in the color of its bar. Diamonds mark skills loaded inline, into the caller's context. Next to each bar are the tokens that context spent. The example is recorded from a real session, described in [e2e/](e2e/README.md).
 
 ## Install
 
@@ -114,7 +114,7 @@ Each line starts with fixed columns: start time (UTC), duration with a bar, and 
 
 ## How it works
 
-The plugin registers hooks that run after every tool call, when a subagent stops, when a session starts, and before a compaction. Each hook appends one JSON line to `.harness-profile/<session-id>.jsonl` at the git root:
+The plugin registers hooks that run after every tool call, when a subagent stops, when a session starts, and before and after a compaction. Each hook appends one JSON line to `.harness-profile/<session-id>.jsonl` at the git root:
 
 ```
 {"v":2,"harness":"claude","at":"2026-11-11T02:03:35.731Z","session":"6bf84955-b026-428a-b2e2-ad3bb1a3cb72","tool_use_id":"toolu_01BQtQxAxtVc1uDmGEyvbNJ1","tool":"Skill","name":"planner","duration_ms":12,"ok":true,"branch":"main","args":"Add a search box to the header. Done when index.html has one input with id \"search\".","context_tokens":44437}
@@ -126,7 +126,7 @@ The whole tool is one dependency-free file, [plugin/libexec/hp.js](plugin/libexe
 
 ### Claude Code (web or CLI)
 
-Claude Code on the web and the CLI send the same hook data, so the trace is the same in both. A forked skill or a subagent reports its agent id, and every call it makes carries that id, so the tree links calls by id, not by time. A subagent or forked skill started in the background returns at once, so its end, result, and tokens come from its last `SubagentStop`. Tokens come from Claude Code's transcript of each context under `~/.claude/projects/`.
+Claude Code on the web and the CLI send the same hook data, so the trace is the same in both. A forked skill or a subagent reports its agent id, and every call it makes carries that id, so the tree links calls by id, not by time. A subagent or forked skill started in the background returns at once, so its end and tokens come from its last `SubagentStop`, and its result is the report it hands back. Tokens come from Claude Code's transcript of each context under `~/.claude/projects/`.
 
 ### Codex (web or CLI)
 

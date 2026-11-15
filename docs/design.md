@@ -20,6 +20,7 @@ Recorded on Claude Code 2.1.322, with the payloads in [test/fixtures/](../test/f
 Three things the table doesn't show:
 
 - A background subagent with children of its own fires `SubagentStop` more than once. It stops while it waits, each child's report wakes it, and it stops again. Its last stop holds the verdict.
+- A background subagent reports to its caller with a `SubagentHandback` tool call that carries the report as `message`. The stop that follows has an empty `last_assistant_message`, and a later completion notice can wake the subagent for one more stop whose message is a remark ("the notice adds nothing new").
 - `SubagentStop` also fires for the compaction's own summarizer, with no `agent_type` and no call that started it.
 - The hooks never say how full a context is or what it spent. Claude Code's transcript does: each assistant message carries `usage`, and a subagent writes its own transcript under `<session>/subagents/agent-<id>.jsonl`. The format is undocumented.
 
@@ -33,7 +34,7 @@ Three things the table doesn't show:
 4. **The harness comes from the command line** (`hp capture claude`), not from the payload's shape.
 5. **Traces go to the git root**, in `.harness-profile/<session>.jsonl`, excluded through `.git/info/exclude`. `CLAUDE_PROJECT_DIR` can sit below the git root, and `hp tree` must find the trace from anywhere in the repository. Each record is one `appendFileSync` of at most 4096 bytes, so concurrent hooks don't interleave. To fit, `result` shrinks first, then `args`.
 6. **`result` is the first line of the response.** There are no project-specific verdict patterns. A report that leads with its verdict shows it.
-7. **A background call ends at its last `SubagentStop`.** The call records `background` and no result. The tree takes the end, result, and spend from the stop. A trace captured before background skills were recognized holds the launch notice as its result, and the tree reads that as a background call too.
+7. **A background call ends at its last `SubagentStop`.** The call records `background` and no result. The tree takes the end and spend from the stop, and the result from the subagent's `SubagentHandback` call, or from the stop when there is none. A trace captured before background skills were recognized holds the launch notice as its result, and the tree reads that as a background call too.
 
 ### Tree
 
