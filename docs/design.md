@@ -54,7 +54,7 @@ Three things the table doesn't show:
 
 17. **On the web, the hook is committed to the repository.** Cloud sessions don't install plugins enabled in a repository's settings, so `init` copies the launcher, `hp.js` and `view.html` into `.claude/harness-profiler/` and merges the hook entries into `.claude/settings.json`. A re-run replaces what an older `init` wrote.
 18. **A repository can have the plugin and a committed hook.** Both record, so `tree` drops repeated `tool_use_id`s and repeated events. `doctor` reports a committed copy that misses events, is not async, or differs from the copy that runs it.
-19. **A `show-profile` skill delivers the page.** A cloud session's container is thrown away, and GitHub shows a committed `.html` as source. The skill publishes the page as an artifact where it can, opens it in the browser on the user's machine, and otherwise commits it. It uses the plugin's launcher before the committed one, because the committed copy can be older.
+19. **A `show-profile` skill delivers the page.** A cloud session's container is thrown away, and GitHub shows a committed `.html` as source. The skill opens the page in the browser on the user's machine, publishes it as an artifact in a cloud session that can, and otherwise commits it. A local session can have an artifact tool too, and a trace must not leave the machine unasked. It uses the plugin's launcher before the committed one, because the committed copy can be older.
 20. **One CLI name, `harness-profiler`.** The README uses `npx -y github:afurmanov/harness-profiler` until there is an npm release.
 
 ## Rejected

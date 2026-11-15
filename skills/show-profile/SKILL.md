@@ -31,8 +31,8 @@ If `tree` says no calls were recorded, say so, run `sh HP doctor`, report what i
 
 Pick the first case that applies. If its step fails or is refused, go on to the next one.
 
-- **You have a tool that publishes an HTML page as an artifact** (Claude Code on the web): publish the file as a private artifact titled `Harness profile <first 8 characters of the session id>` and give the user the link.
-- **You run on the user's machine** (`CLAUDE_CODE_REMOTE` is not `true`): open the file with `open` (macOS), `xdg-open` (Linux) or `start` (Windows), and give its path.
+- **You run on the user's machine** (`CLAUDE_CODE_REMOTE` is not `true`): open the file with `open` (macOS), `xdg-open` (Linux) or `start` (Windows), and give its path. Don't publish it, even if you have a tool that can: the trace stays on the machine unless the user asks for a link.
+- **A cloud session with a tool that publishes an HTML page as an artifact**: publish the file as a private artifact titled `Harness profile <first 8 characters of the session id>` and give the user the link.
 - **Otherwise** (a cloud session with no artifact tool): the container is thrown away when the session ends, so commit the page and the trace to the current branch, under `harness-profile/` at the git root, as `<session id>.html` and `<session id>.jsonl`, and push. Running this skill is the user's request for that commit and push, because nothing else would save the trace. Tell the user the paths and that GitHub shows an HTML file as source, so they open it after `git pull`.
 
 ## 4. Answer
