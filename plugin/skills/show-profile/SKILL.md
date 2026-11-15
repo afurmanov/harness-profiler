@@ -11,8 +11,8 @@ Render this session's trace and put the page where the user can open it. The tra
 
 Use the first launcher that exists:
 
-1. `../../libexec/hp` relative to this skill's base directory (the plugin this skill came with).
-2. `.claude/harness-profiler/hp` at the git root (the hook `init` committed).
+1. `../../libexec/hp.sh` relative to this skill's base directory (the plugin this skill came with).
+2. `.claude/harness-profiler/hp.sh` at the git root (the hook `init` committed).
 
 A repository can have both, and the committed copy can be older than the plugin, so the plugin's goes first.
 

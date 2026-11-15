@@ -9,7 +9,7 @@
 // Usage: node collect.js <trace.jsonl> <work dir> <output dir>
 const fs = require('fs');
 const path = require('path');
-const { fillContextTokens } = require('../../libexec/hp.js');
+const { fillContextTokens } = require('../../plugin/libexec/hp.js');
 
 const [trace, work, out] = process.argv.slice(2);
 const USAGE_KEYS = ['input_tokens', 'cache_read_input_tokens', 'cache_creation_input_tokens', 'output_tokens'];

@@ -1,9 +1,9 @@
 {
   "name": "harness-profiler",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Records every skill, agent and tool call of a Claude Code session, and shows which calls share a context and what each one costs in tokens.",
-  "bin": { "harness-profiler": "libexec/hp.js" },
-  "files": ["libexec/", "hooks/", "skills/", ".claude-plugin/", "README.md", "LICENSE"],
+  "bin": { "harness-profiler": "plugin/libexec/hp.js" },
+  "files": ["plugin/", ".claude-plugin/", "README.md", "LICENSE"],
   "engines": { "node": ">=18" },
   "scripts": { "test": "node --test", "e2e:render": "node e2e/render.js --png" },
   "devDependencies": { "playwright": "^1.63.0" },

@@ -15,7 +15,7 @@ trap 'rm -rf "$work"' EXIT
 cp -R "$here/fixture/." "$work/"
 cd "$work"
 git init -q -b main && git add -A && git -c user.name=e2e -c user.email=e2e@example.com commit -qm fixture
-node "$root/libexec/hp.js" init claude >/dev/null
+node "$root/plugin/libexec/hp.js" init claude >/dev/null
 
 allowed='Skill Agent Read Edit Write Bash(wc:*) Bash(grep:*) Bash(cat:*) Bash(false)'
 claude=${CLAUDE:-claude}

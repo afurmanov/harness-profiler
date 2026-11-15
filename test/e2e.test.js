@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { contextsOf } = require('../libexec/hp.js');
+const { contextsOf } = require('../plugin/libexec/hp.js');
 const { outputs } = require('../e2e/render.js');
 
 const OUTPUT = path.join(__dirname, '..', 'e2e', 'claude', 'output');

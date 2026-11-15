@@ -95,7 +95,7 @@ The same session as the diagram above, one self-contained page:
 npx -y github:afurmanov/harness-profiler tree --format html > trace.html
 ```
 
-`tree` also takes a session id prefix (`tree 11cf`), `--branch <name>` for every session recorded on that branch, and `--verbose` for every tool call, untrimmed. In a repository with the committed hook, `sh .claude/harness-profiler/hp tree` does the same with no network.
+`tree` also takes a session id prefix (`tree 11cf`), `--branch <name>` for every session recorded on that branch, and `--verbose` for every tool call, untrimmed. In a repository with the committed hook, `sh .claude/harness-profiler/hp.sh tree` does the same with no network.
 
 The text tree of the example, one line per skill or subagent call:
 
@@ -122,7 +122,7 @@ The plugin registers hooks that run after every tool call, when a subagent stops
 
 `tree` reads these lines and builds the contexts: which call started which subagent, and which subagent made each call. The first write adds `.harness-profile/` to `.git/info/exclude`, so traces stay out of commits. Nothing leaves your machine unless you run `/show-profile` in a cloud session.
 
-The whole tool is one dependency-free file, [libexec/hp.js](libexec/hp.js), started by a small shell launcher, [libexec/hp](libexec/hp), plus the page template [libexec/view.html](libexec/view.html). The hook runs in the background (`async`), so tool calls don't wait for it, and it exits 0 whatever happens, so a broken trace doesn't break your session.
+The whole tool is one dependency-free file, [plugin/libexec/hp.js](plugin/libexec/hp.js), started by a small shell launcher, [plugin/libexec/hp.sh](plugin/libexec/hp.sh), plus the page template [plugin/libexec/view.html](plugin/libexec/view.html). The [plugin/](plugin) folder is all that Claude Code installs. The rest of the repository is tests, the recorded example, and notes. The hook runs in the background (`async`), so tool calls don't wait for it, and it exits 0 whatever happens, so a broken trace doesn't break your session.
 
 ### Claude Code (web or CLI)
 
@@ -166,7 +166,7 @@ Report each check as pass or fail, with the tree line that shows it.
 ## Turn it off
 
 - Plugin: `/plugin uninstall harness-profiler@harness-profiler`.
-- Committed hook: remove the `harness-profiler/hp` entries from `.claude/settings.json` and delete `.claude/harness-profiler/`.
+- Committed hook: remove the `harness-profiler/hp.sh` entries from `.claude/settings.json` and delete `.claude/harness-profiler/`.
 - Traces: delete `.harness-profile/`.
 
 ## Development

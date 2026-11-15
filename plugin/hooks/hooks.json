@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp\" capture claude",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp.sh\" capture claude",
             "timeout": 5,
             "async": true
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp\" capture claude",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp.sh\" capture claude",
             "timeout": 5,
             "async": true
           }
@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp\" capture claude",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp.sh\" capture claude",
             "timeout": 5,
             "async": true
           }
@@ -45,7 +45,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp\" capture claude",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp.sh\" capture claude",
             "timeout": 5,
             "async": true
           }
@@ -58,7 +58,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp\" capture claude",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp.sh\" capture claude",
             "timeout": 5,
             "async": true
           }
@@ -71,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp\" capture claude",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/libexec/hp.sh\" capture claude",
             "timeout": 5,
             "async": true
           }

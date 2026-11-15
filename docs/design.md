@@ -27,7 +27,7 @@ Three things the table doesn't show:
 
 ### Capture
 
-1. **One readable Node file, no dependencies.** [libexec/hp.js](../libexec/hp.js) holds `capture`, `tree`, `init`, and `doctor`. People install hooks they can read. The POSIX launcher [libexec/hp](../libexec/hp) finds `node` with shell builtins only, because a hook can run with a bare `PATH`.
+1. **One readable Node file, no dependencies.** [plugin/libexec/hp.js](../plugin/libexec/hp.js) holds `capture`, `tree`, `init`, and `doctor`. People install hooks they can read. The POSIX launcher [plugin/libexec/hp.sh](../plugin/libexec/hp.sh) finds `node` with shell builtins only, because a hook can run with a bare `PATH`.
 2. **A broken capture doesn't break the session.** `capture` exits 0 with no output whatever happens, and without Node the launcher does the same. A profiler must not break or slow the session it watches.
 3. **`PostToolUse` and `PostToolUseFailure`, async.** Both carry `duration_ms`, so there is no `PreToolUse` pairing. The hook costs about 33 ms per call, mostly Node's startup. `async: true` takes that off the tool call.
 4. **The harness comes from the command line** (`hp capture claude`), not from the payload's shape.
@@ -48,14 +48,15 @@ Three things the table doesn't show:
 13. **`tree --format html` is a UML sequence diagram.** A context is a participant. A call that opens a context is a message to its lifeline, and the dashed return carries the result and duration. A background call has UML's open arrowhead. Rows are in time order, not to scale.
 14. **Color follows history.** A copy keeps its parent's color and a fresh context gets a new one, in the page and in the text tree.
 15. **Contexts that never overlap share a column**, to save width: a context takes the first column right of its caller's whose last context has ended. A shared column's header holds one chip per context, in the color of its bar.
-16. **The page is one file**, [libexec/view.html](../libexec/view.html), with the trace inlined as JSON. It loads nothing from the network and inserts trace text escaped.
+16. **The page is one file**, [plugin/libexec/view.html](../plugin/libexec/view.html), with the trace inlined as JSON. It loads nothing from the network and inserts trace text escaped.
 
 ### Install
 
 17. **On the web, the hook is committed to the repository.** Cloud sessions don't install plugins enabled in a repository's settings, so `init` copies the launcher, `hp.js` and `view.html` into `.claude/harness-profiler/` and merges the hook entries into `.claude/settings.json`. A re-run replaces what an older `init` wrote.
 18. **A repository can have the plugin and a committed hook.** Both record, so `tree` drops repeated `tool_use_id`s and repeated events. `doctor` reports a committed copy that misses events, is not async, or differs from the copy that runs it.
 19. **A `show-profile` skill delivers the page.** A cloud session's container is thrown away, and GitHub shows a committed `.html` as source. The skill opens the page in the browser on the user's machine, publishes it as an artifact in a cloud session that can, and otherwise commits it. A local session can have an artifact tool too, and a trace must not leave the machine unasked. It uses the plugin's launcher before the committed one, because the committed copy can be older.
-20. **One CLI name, `harness-profiler`.** The README uses `npx -y github:afurmanov/harness-profiler` until there is an npm release.
+20. **The plugin is the `plugin/` folder, not the repository.** Claude Code copies only that folder, and the plugin directory scans only that folder, so tests, fixtures, and recorded sessions stay out of what a user installs. The launcher is named `hp.sh` because the directory wants a file's name to match the interpreter that starts it. `init` replaces a hook committed under the old name, `hp`.
+21. **One CLI name, `harness-profiler`.** The README uses `npx -y github:afurmanov/harness-profiler` until there is an npm release.
 
 ## Rejected
 

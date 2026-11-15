@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { init, doctor, HOOK_COMMAND } = require('../libexec/hp.js');
+const { init, doctor, HOOK_COMMAND, OLD_HOOK_COMMAND } = require('../plugin/libexec/hp.js');
 const { tempDir, tempRepo, captureFixture } = require('./helpers.js');
 
 const settingsOf = (repo) => JSON.parse(fs.readFileSync(path.join(repo, '.claude', 'settings.json'), 'utf8'));
@@ -32,7 +32,7 @@ test('init claude copies the hook and registers it once, keeping other settings'
     assert.equal(ours[0].matcher, '*');
     assert.equal(ours[0].hooks[0].async, true, `${event} runs in the background`);
   }
-  const hp = path.join(repo, '.claude', 'harness-profiler', 'hp');
+  const hp = path.join(repo, '.claude', 'harness-profiler', 'hp.sh');
   assert.ok(fs.statSync(hp).mode & 0o100);
   assert.ok(fs.existsSync(path.join(repo, '.claude', 'harness-profiler', 'hp.js')));
   assert.ok(fs.existsSync(path.join(repo, '.claude', 'harness-profiler', 'view.html')));
@@ -40,11 +40,11 @@ test('init claude copies the hook and registers it once, keeping other settings'
 });
 
 test('show-profile finds the launcher from either install', () => {
-  const plugin = path.join(__dirname, '..', 'skills', 'show-profile');
-  assert.ok(fs.existsSync(path.join(plugin, '..', '..', 'libexec', 'hp')), 'the plugin: ../../libexec/hp from the skill');
+  const plugin = path.join(__dirname, '..', 'plugin', 'skills', 'show-profile');
+  assert.ok(fs.existsSync(path.join(plugin, '..', '..', 'libexec', 'hp.sh')), 'the plugin: ../../libexec/hp.sh from the skill');
   const skill = fs.readFileSync(path.join(plugin, 'SKILL.md'), 'utf8');
-  assert.match(skill, /`\.claude\/harness-profiler\/hp` at the git root/);
-  assert.ok(skill.indexOf('../../libexec/hp') < skill.indexOf('.claude/harness-profiler/hp'), 'the plugin first: a committed copy can be older');
+  assert.match(skill, /`\.claude\/harness-profiler\/hp\.sh` at the git root/);
+  assert.ok(skill.indexOf('../../libexec/hp.sh') < skill.indexOf('.claude/harness-profiler/hp.sh'), 'the plugin first: a committed copy can be older');
 });
 
 test('the committed hook records a call', () => {
@@ -97,7 +97,7 @@ test('the committed hook renders html from its own copy', () => {
   const repo = tempRepo();
   init(['claude'], repo);
   captureFixture('claude-web.jsonl', { dir: repo });
-  const run = spawnSync('sh', [path.join(repo, '.claude', 'harness-profiler', 'hp'), 'tree', '--format', 'html'], { cwd: repo, env: { ...process.env, CLAUDE_PROJECT_DIR: repo } });
+  const run = spawnSync('sh', [path.join(repo, '.claude', 'harness-profiler', 'hp.sh'), 'tree', '--format', 'html'], { cwd: repo, env: { ...process.env, CLAUDE_PROJECT_DIR: repo } });
   assert.equal(run.status, 0, run.stderr.toString());
   assert.match(run.stdout.toString(), /^<!doctype html>/);
 });
@@ -113,4 +113,20 @@ test('init claude upgrades an entry an older init wrote, in place', () => {
   assert.equal(entries.length, 2);
   assert.equal(entries[0].hooks[0].async, true);
   assert.deepEqual(entries[1], other);
+});
+
+test('init claude replaces a hook committed under the old launcher name', () => {
+  const repo = tempRepo();
+  const dir = path.join(repo, '.claude', 'harness-profiler');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'hp'), '#!/bin/sh\n');
+  const old = { matcher: '*', hooks: [{ type: 'command', command: OLD_HOOK_COMMAND, timeout: 5, async: true }] };
+  fs.writeFileSync(path.join(repo, '.claude', 'settings.json'), JSON.stringify({ hooks: { PostToolUse: [old] } }));
+  assert.match(doctor(repo, {}, tempDir()), /update: +the committed hook misses .* and has another version of hp\.sh/);
+  init(['claude'], repo);
+  const entries = settingsOf(repo).hooks.PostToolUse;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].hooks[0].command, HOOK_COMMAND);
+  assert.ok(!fs.existsSync(path.join(dir, 'hp')), 'the old launcher is gone');
+  assert.doesNotMatch(doctor(repo, {}, tempDir()), /update:/);
 });

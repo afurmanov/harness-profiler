@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "harness-profiler",
-      "source": "./",
+      "source": "./plugin",
       "description": "Records every skill, agent and tool call of a Claude Code session, and shows which calls share a context and what each one costs in tokens."
     }
   ]

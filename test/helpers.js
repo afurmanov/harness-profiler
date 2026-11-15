@@ -2,7 +2,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { capture } = require('../libexec/hp.js');
+const { capture } = require('../plugin/libexec/hp.js');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
 

@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const { renderTree, renderHtml, contextsOf, tree } = require('../libexec/hp.js');
+const { renderTree, renderHtml, contextsOf, tree } = require('../plugin/libexec/hp.js');
 const { callColumn, captureFixture, captureContexts, tempRepo, WEB_RECEIVED_S } = require('./helpers.js');
 
 const demo = () => captureFixture('claude-web.jsonl', { times: WEB_RECEIVED_S }).records;

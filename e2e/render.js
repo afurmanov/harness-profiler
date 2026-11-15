@@ -6,7 +6,7 @@
 // Playwright, a dev-only dependency.
 const fs = require('fs');
 const path = require('path');
-const { renderTree, renderHtml } = require('../libexec/hp.js');
+const { renderTree, renderHtml } = require('../plugin/libexec/hp.js');
 
 function readRecords(file) {
   return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line));

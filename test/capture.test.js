@@ -4,12 +4,12 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { buildRecord, buildEventRecord, capture, serialize, mask, renderTree, fillContextTokens, contextSpend, contextsOf } = require('../libexec/hp.js');
+const { buildRecord, buildEventRecord, capture, serialize, mask, renderTree, fillContextTokens, contextSpend, contextsOf } = require('../plugin/libexec/hp.js');
 const { callColumn, fixtureLines, tempDir, tempRepo, captureFixture, captureContexts, captureBackground } = require('./helpers.js');
 
 const callsOf = (records) => records.filter((r) => r.tool);
 
-const HP = path.join(__dirname, '..', 'libexec', 'hp');
+const HP = path.join(__dirname, '..', 'plugin', 'libexec', 'hp.sh');
 
 for (const fixture of ['claude-web.jsonl', 'claude-local.jsonl']) {
   test(`${fixture}: one record per tool call and one per session start`, () => {

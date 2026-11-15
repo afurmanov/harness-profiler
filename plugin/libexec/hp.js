@@ -44,10 +44,15 @@ const SECRETS = [
   [/\b(?:gh[pousr]_|github_pat_|sk-|xox[abp]-)[\w-]{10,}/g, '[redacted]'],
 ];
 const SECRET_KEY = /token|secret|password|api_?key|authorization|credential/i;
-const HOOK_COMMAND = 'sh "$CLAUDE_PROJECT_DIR/.claude/harness-profiler/hp" capture claude';
+const LAUNCHER = 'hp.sh';
+// Before 0.2.0 the launcher was `hp`, and a committed hook ran it by that name.
+const OLD_LAUNCHER = 'hp';
+const hookCommand = (launcher) => `sh "$CLAUDE_PROJECT_DIR/.claude/harness-profiler/${launcher}" capture claude`;
+const HOOK_COMMAND = hookCommand(LAUNCHER);
+const OLD_HOOK_COMMAND = hookCommand(OLD_LAUNCHER);
 const HOOK_TIMEOUT_S = 5;
 const HOOK_DIR = path.join('.claude', 'harness-profiler');
-const HOOK_FILES = ['hp', 'hp.js', VIEW_TEMPLATE];
+const HOOK_FILES = [LAUNCHER, 'hp.js', VIEW_TEMPLATE];
 
 // ---------- text helpers ----------
 
@@ -118,9 +123,15 @@ function excludeTraces(projectDir) {
 // Claude Code sets CLAUDE_PROJECT_DIR to the launch directory, which can sit
 // below the git root. Traces go to the git root so `hp tree` finds them from
 // anywhere in the repository.
-function projectDir(cwd, env) {
+function projectDir(cwd, env = hookEnv()) {
   const start = env.CLAUDE_PROJECT_DIR || cwd;
   return gitRoot(start) || start;
+}
+
+// The one variable the hook needs. The plugin directory's scan holds a plugin
+// that hands the whole environment around.
+function hookEnv() {
+  return { CLAUDE_PROJECT_DIR: process.env.CLAUDE_PROJECT_DIR };
 }
 
 // ---------- capture ----------
@@ -397,7 +408,7 @@ function sessionFile(dir, session) {
   return path.join(dir, TRACE_DIR, `${String(session).replace(/[^\w.-]/g, '_')}.jsonl`);
 }
 
-function capture(harness, input, env = process.env, now = new Date()) {
+function capture(harness, input, env = hookEnv(), now = new Date()) {
   const payload = JSON.parse(input);
   const isTool = TOOL_EVENTS.includes(payload.hook_event_name);
   if (!CAPTURED_EVENTS.includes(payload.hook_event_name) || !payload.session_id || (isTool && !payload.tool_name)) return null;
@@ -797,7 +808,8 @@ function hookEntry() {
   return { matcher: '*', hooks: [{ type: 'command', command: HOOK_COMMAND, timeout: HOOK_TIMEOUT_S, async: true }] };
 }
 
-const isOurs = (entry) => (entry.hooks || []).some((h) => h.command === HOOK_COMMAND);
+const isOurCommand = (command) => command === HOOK_COMMAND || command === OLD_HOOK_COMMAND;
+const isOurs = (entry) => (entry.hooks || []).some((h) => isOurCommand(h.command));
 
 // Replaces an entry an older `init` wrote, so a re-run picks up new hook options.
 function mergeHooks(settings) {
@@ -818,7 +830,8 @@ function init(argv, cwd) {
   const target = path.join(repo, HOOK_DIR);
   fs.mkdirSync(target, { recursive: true });
   for (const file of HOOK_FILES) fs.copyFileSync(path.join(__dirname, file), path.join(target, file));
-  fs.chmodSync(path.join(target, 'hp'), 0o755);
+  fs.chmodSync(path.join(target, LAUNCHER), 0o755);
+  fs.rmSync(path.join(target, OLD_LAUNCHER), { force: true });
   // Cloud sessions don't install plugins, so the skill that shows the trace
   // goes into the repository's own skills.
   const skill = path.join(repo, '.claude', SHOW_SKILL);
@@ -862,7 +875,7 @@ function hookSources(repo, home) {
 function staleHook(repo) {
   const settings = readJson(path.join(repo, '.claude', 'settings.json'));
   const hooks = (settings && settings.hooks) || {};
-  const ours = (event) => (hooks[event] || []).filter(isOurs).flatMap((e) => e.hooks.filter((h) => h.command === HOOK_COMMAND));
+  const ours = (event) => (hooks[event] || []).filter(isOurs).flatMap((e) => e.hooks.filter((h) => isOurCommand(h.command)));
   if (!CAPTURED_EVENTS.some((event) => ours(event).length)) return undefined;
   const missing = CAPTURED_EVENTS.filter((event) => !ours(event).length);
   const blocking = CAPTURED_EVENTS.some((event) => ours(event).some((h) => h.async !== true));
@@ -871,7 +884,7 @@ function staleHook(repo) {
   return gaps.length ? gaps.join(' and ') : undefined;
 }
 
-function doctor(cwd, env = process.env, home = os.homedir()) {
+function doctor(cwd, env = hookEnv(), home = os.homedir()) {
   const dir = projectDir(cwd, env);
   const sessions = listSessions(dir);
   const newest = sessions.length ? Math.max(...sessions.map((s) => s.last)) : undefined;
@@ -912,7 +925,7 @@ function main(argv) {
     switch (command) {
       case 'tree': {
         const color = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
-        console.log(tree(rest, projectDir(process.cwd(), process.env), { color }));
+        console.log(tree(rest, projectDir(process.cwd()), { color }));
         return 0;
       }
       case 'init': console.log(init(rest, process.cwd())); return 0;
@@ -928,4 +941,4 @@ function main(argv) {
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
 
-module.exports = { fillContextTokens, contextSpend, spentTokens, buildRecord, buildEventRecord, capture, serialize, contextsOf, renderTree, renderHtml, buildForest, tree, mergeHooks, init, doctor, mask, HOOK_COMMAND };
+module.exports = { fillContextTokens, contextSpend, spentTokens, buildRecord, buildEventRecord, capture, serialize, contextsOf, renderTree, renderHtml, buildForest, tree, mergeHooks, init, doctor, mask, HOOK_COMMAND, OLD_HOOK_COMMAND };
