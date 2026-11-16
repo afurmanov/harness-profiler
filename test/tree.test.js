@@ -157,7 +157,11 @@ test('a background skill ends at its last SubagentStop and shows that result', (
     const out = renderTree([record, ...stops]);
     assert.match(out, /114 s .*validator \(skill\).*background.*\*\*PASS\*\*/, label);
     assert.doesNotMatch(out, /Running in the background|Waiting on/, label);
-    assert.match(renderTree([record]), /validator \(skill\).*background/, `${label}, still running`);
+    assert.match(renderTree([record]), /running +validator \(skill\).*background/, `${label}, still running`);
+    assert.doesNotMatch(renderTree([record]), /25 ms/, `${label}, still running`);
+    const data = (records) => JSON.parse(renderHtml({ id: 'x', records }).match(/const D = (.*);\n/)[1]);
+    assert.equal(data([record]).calls[0].running, true, `${label}, still running in the page`);
+    assert.equal(data([record, ...stops]).calls[0].running, undefined, label);
     assert.doesNotMatch(renderTree([record]), /Running in the background/, `${label}, still running`);
   }
 });

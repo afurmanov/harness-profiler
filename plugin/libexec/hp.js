@@ -499,10 +499,12 @@ const LAUNCH_NOTICE = /^Running in the background as @/;
 // and that stop's message is a remark, not the report:
 //   17:58:18  SubagentHandback  "Both verdicts are PASS."
 //   17:58:21  SubagentStop      "The completion notice adds nothing new: ..."
+// Until its first stop it is `running`: the duration recorded so far is the
+// launch, about 25 ms, not the work.
 function withStop(record, stop, handback) {
   const { result, ...launched } = record;
   const call = LAUNCH_NOTICE.test(result || '') ? { ...launched, background: true } : record;
-  if (!stop) return call;
+  if (!stop) return call.background ? { ...call, running: true } : call;
   const merged = { ...call, child_agent_type: call.child_agent_type || stop.agent_type };
   if (!call.background) return merged;
   const start = startOf(call);
@@ -663,6 +665,8 @@ function paint(text, ctx, colors) {
 }
 
 const BAR_CELLS = 8;
+// In the duration column of a background call that has not stopped yet.
+const RUNNING = 'running';
 const BAR_EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 const BAR_STEPS = BAR_EIGHTHS.length;
 const COLUMNS = [['time', 8, 'left'], ['duration', 8, 'right'], ['', BAR_CELLS, 'left'], ['new', 6, 'right'], ['cached', 7, 'right'], ['out', 6, 'right']];
@@ -700,9 +704,9 @@ function formatLine(node, depth, { verbose, kinds, colors, spend, longest }) {
   }
   const r = node.record;
   const ctx = contextOf(r);
-  const ms = r.duration_ms || 0;
+  const ms = r.running ? 0 : r.duration_ms || 0;
   const spent = r.child_agent_id && spend.get(r.child_agent_id);
-  const prefix = columns([clock(node.start), formatDuration(ms), durationBar(ms, longest), ...(spent ? [spent.new, spent.cached, spent.out].map(formatCount) : [])]);
+  const prefix = columns([clock(node.start), r.running ? RUNNING : formatDuration(ms), durationBar(ms, longest), ...(spent ? [spent.new, spent.cached, spent.out].map(formatCount) : [])]);
   const words = [contextWords(r, kinds), r.ok === false ? 'failed' : ''].filter(Boolean).join(' ');
   const head = `${indent}${callLabel(r.tool, r.name)}`;
   const plainHead = words ? `${head} ${words}` : head;
@@ -746,7 +750,7 @@ function renderHtml(session) {
     markers,
     calls: calls.map((r) => ({
       ctx: contextOf(r), tool: r.tool, name: r.name, start: startOf(r), dur: r.duration_ms || 0,
-      ok: r.ok !== false, ctxTokens: r.context_tokens, args: r.args, result: r.result, child: r.child_agent_id, background: r.background,
+      ok: r.ok !== false, ctxTokens: r.context_tokens, args: r.args, result: r.result, child: r.child_agent_id, background: r.background, running: r.running,
     })),
   };
   const json = JSON.stringify(data).replace(/</g, '\\u003c');

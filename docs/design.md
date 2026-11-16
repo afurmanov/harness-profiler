@@ -34,7 +34,7 @@ Three things the table doesn't show:
 4. **The harness comes from the command line** (`hp capture claude`), not from the payload's shape.
 5. **Traces go to the git root**, in `.harness-profile/<session>.jsonl`, excluded through `.git/info/exclude`. `CLAUDE_PROJECT_DIR` can sit below the git root, and `hp tree` must find the trace from anywhere in the repository. Each record is one `appendFileSync` of at most 4096 bytes, so concurrent hooks don't interleave. To fit, `result` shrinks first, then `args`.
 6. **`result` is the first line of the response.** There are no project-specific verdict patterns. A report that leads with its verdict shows it.
-7. **A background call ends at its last `SubagentStop`.** The call records `background` and no result. The tree takes the end and spend from the stop, and the result from the subagent's `SubagentHandback` call, or from the stop when there is none. A trace captured before background skills were recognized holds the launch notice as its result, and the tree reads that as a background call too.
+7. **A background call ends at its last `SubagentStop`.** The call records `background` and no result. The tree takes the end and spend from the stop, and the result from the subagent's `SubagentHandback` call, or from the stop when there is none. Until the first stop arrives, the call shows as `running` with no duration and no return, because the duration recorded so far is the launch. A trace captured before background skills were recognized holds the launch notice as its result, and the tree reads that as a background call too.
 
 ### Tree
 

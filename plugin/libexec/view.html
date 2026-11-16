@@ -63,6 +63,8 @@ const SEQ_GUTTER = 130, SEQ_RIGHT = 120, SEQ_COL = 230, SEQ_HEAD = 54, SEQ_ROW =
 const SEQ_SPENT_ROW = 62, LABEL_PAD = 12;
 const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const clip = (t, n) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
+// A background call with no end recorded yet has no duration to show.
+const took = (c) => (c.running ? 'running' : dur(c.dur));
 const dur = (ms) => (ms < 1000 ? `${ms} ms` : Math.round(ms / 100) < 100 ? `${(Math.round(ms / 100) / 10).toFixed(1)} s` : `${Math.round(ms / 1000)} s`);
 const tok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`) + ' tok';
 const count = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`);
@@ -110,7 +112,7 @@ function sequenceEvents(all) {
   D.calls.forEach((c, i) => {
     if (c.child && byId.has(c.child)) {
       ev.push({ t: c.start, k: 0, type: 'call', i, from: c.ctx, to: c.child });
-      ev.push({ t: c.start + c.dur, k: 2, type: 'return', i, from: c.child, to: c.ctx });
+      if (!c.running) ev.push({ t: c.start + c.dur, k: 2, type: 'return', i, from: c.child, to: c.ctx });
     } else if (c.tool === 'Skill' || all) {
       ev.push({ t: c.start, k: 1, type: 'self', i, at: c.ctx });
     }
@@ -261,7 +263,7 @@ function drawSequence() {
       return;
     }
     const c = D.calls[e.i];
-    const tip = `<title>${esc(`${label(c.tool, c.name)} · ${clock(c.start)} · ${dur(c.dur)}${c.ok ? '' : ' · failed'}${c.result ? `\n-> ${c.result}` : ''}`)}</title>`;
+    const tip = `<title>${esc(`${label(c.tool, c.name)} · ${clock(c.start)} · ${took(c)}${c.ok ? '' : ' · failed'}${c.result ? `\n-> ${c.result}` : ''}`)}</title>`;
     if (e.type === 'self') {
       const x = lx.get(e.at) + 5, inline = c.tool === 'Skill';
       const name = c.name || kindWord(c.tool), kind = ` (${kindWord(c.tool)})`;
@@ -294,7 +296,7 @@ function drawSequence() {
       : esc(clip(`${c.result ? c.result : 'done'} · ${dur(c.dur)}`, room));
     s += `<g class="hit" data-i="${e.i}"><line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="${stroke}" stroke-width="${isCall ? 2 : 1.5}"${isCall ? '' : ' stroke-dasharray="5 4"'} marker-end="url(#${isCall ? `head-${c.background ? 'open-' : ''}${child.hue % PALETTE}` : 'head-return'})"/>`
       + `<text class="${isCall ? 'msg' : 'msg muted'}${c.ok || isCall ? '' : ' failtext'}" x="${lx0}" y="${y - 6}">${body}</text>`
-      + (isCall && (child.kind === 'copy' || c.background) ? `<text class="muted" x="${lx0}" y="${y + 14}">${esc(clip([child.kind === 'copy' && 'starts with a copy of this history', c.background && 'runs in the background'].filter(Boolean).join(', '), room))}</text>` : '')
+      + (isCall && (child.kind === 'copy' || c.background) ? `<text class="muted" x="${lx0}" y="${y + 14}">${esc(clip([child.kind === 'copy' && 'starts with a copy of this history', c.background && (c.running ? 'still running in the background' : 'runs in the background')].filter(Boolean).join(', '), room))}</text>` : '')
       + `${tip}</g>`;
   });
   // UML: a filled head is a synchronous call, an open one an asynchronous call
@@ -325,6 +327,7 @@ const ctxName = (id) => (byId.get(id) ? `${byId.get(id).label}${id === 'main' ? 
 // An inline skill returns nothing: its text joins the caller's context, and
 // the calls that context makes next are its work, mixed with the caller's own.
 const resultText = (c) => (c.result ? c.result
+  : c.running ? 'none yet: it is still running'
   : c.tool === 'Skill' && !c.child ? `none of its own: it ran inline, so its work is the calls ${ctxName(c.ctx)} makes after it`
   : '(none recorded)');
 // The same square-root scale as the text tree: the longest call fills the bar.
@@ -347,8 +350,8 @@ function drawTree() {
     if (shown) {
       const spent = c.child && spentOf(c.child);
       const hue = color(c.child && byId.has(c.child) ? c.child : c.ctx);
-      h += `<div class="row" id="r${it.i}" data-i="${it.i}"><span class="muted">${clock(c.start)}</span><span class="num">${esc(dur(c.dur))}</span>`
-        + `<span class="bar"><i style="width:${barWidth(c.dur, longest)}px;background:${hue}"></i></span>`
+      h += `<div class="row" id="r${it.i}" data-i="${it.i}"><span class="muted">${clock(c.start)}</span><span class="num">${esc(took(c))}</span>`
+        + `<span class="bar"><i style="width:${barWidth(c.running ? 0 : c.dur, longest)}px;background:${hue}"></i></span>`
         + (spent ? [spent.new, spent.cached, spent.out].map((n) => `<span class="num" title="${n}">${count(n)}</span>`).join('') : '<span></span><span></span><span></span>')
         + `<span class="call" style="padding-left:${pad}px"><i class="chip" style="background:${hue}"></i>`
         + `<span><b>${esc(c.name || kindWord(c.tool))}</b>${c.name ? ` (${esc(kindWord(c.tool))})` : ''}</span>`
