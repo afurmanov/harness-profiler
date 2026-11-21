@@ -3,17 +3,17 @@
 <title>Harness trace</title>
 <!-- Written by harness-profiler (`hp tree --format html`). Self-contained: no network, works from file://. -->
 <style>
-:root { --bg:#f7f7f5; --fg:#1d2329; --muted:#66707a; --line:#dcdfe2; --panel:#fff; --track:#f1f2f0; --fresh:#8d969e;
+:root { --bg:#f7f7f5; --fg:#1d2329; --muted:#66707a; --line:#dcdfe2; --panel:#fff; --track:#e9ebe8; --fresh:#8d969e;
   --c0:#c55e5d; --c1:#2f7f86; --c2:#b07d1f; --c3:#6c58b5; --c4:#3f8a4a; --c5:#b0517f; --c6:#3d6fb3; --c7:#8a6a4f;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --sans: system-ui, -apple-system, "Segoe UI", sans-serif; }
-@media (prefers-color-scheme: dark) { :root { --bg:#14181c; --fg:#e2e6ea; --muted:#9aa4ad; --line:#2b3238; --panel:#1b2025; --track:#20262b; --fresh:#79828a;
+@media (prefers-color-scheme: dark) { :root { --bg:#14181c; --fg:#e2e6ea; --muted:#9aa4ad; --line:#2b3238; --panel:#1b2025; --track:#262d33; --fresh:#79828a;
   --c0:#e07d7b; --c1:#4fb0b8; --c2:#d6a542; --c3:#9b89e0; --c4:#6cc07a; --c5:#dd7fae; --c6:#6f9ee0; --c7:#c29a76; color-scheme: dark; } }
 body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 var(--sans); padding:24px max(16px, 3vw); }
 h1 { font-size:18px; margin:0 0 2px; } h2 { font-size:14px; margin:22px 0 8px; }
 .sub { color:var(--muted); font:12px var(--mono); margin-bottom:10px; }
 .intro { max-width:760px; margin:0 0 14px; color:var(--fg); }
 .intro summary { cursor:pointer; color:var(--muted); font-size:12px; }
-.intro p { margin:6px 0 0; }
+.intro p { margin:6px 0 0; } .intro ul { margin:6px 0 0; padding-left:20px; } .intro li { margin:2px 0; }
 .chip { width:12px; height:12px; border-radius:3px; display:inline-block; flex:none; align-self:center; }
 .symbols { display:flex; flex-wrap:wrap; gap:6px 20px; font-size:12px; color:var(--muted); margin:0 0 14px; }
 .symbols span { display:inline-flex; align-items:center; gap:6px; }
@@ -26,19 +26,50 @@ svg .flabel { font:11px var(--sans); fill:#fff; pointer-events:none; } svg .fail
 svg .spawn rect { stroke:var(--panel); stroke-width:1; }
 .toolbar { margin:0 0 8px; display:flex; align-items:center; gap:16px; font-size:13px; color:var(--muted); }
 .tree { font:13px/1.45 var(--mono); }
-.row, .thead { display:grid; grid-template-columns:8ch 7ch 66px 6.5ch 7.5ch 6.5ch minmax(0, 1fr); column-gap:10px; align-items:baseline; padding:3px 6px; border-radius:4px; }
-.row { cursor:pointer; } .row.mark { cursor:default; } .tree .muted { color:var(--muted); } .thead { color:var(--muted); font-size:12px; border-bottom:1px solid var(--line); border-radius:0; margin-bottom:2px; }
-.num { text-align:right; color:var(--muted); } .bar { height:6px; align-self:center; display:flex; } .bar i { height:6px; border-radius:2px; }
+.row, .thead { display:grid; grid-template-columns:8ch 7ch 66px 7ch 8ch 7ch minmax(0, 1fr); column-gap:10px; align-items:baseline; padding:3px 6px; border-radius:4px; }
+.row { cursor:pointer; } .row.mark { cursor:default; } .tree .muted { color:var(--muted); } .thead { color:var(--muted); font-size:13px; border-bottom:1px solid var(--line); border-radius:0; margin-bottom:2px; }
+.num { text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; } .num.tot { color:var(--fg); font-weight:600; cursor:pointer; } .num.tot:hover { text-decoration:underline; } .bar { height:6px; align-self:center; display:flex; } .bar i { height:6px; border-radius:2px; }
 .call { display:flex; gap:8px; align-items:baseline; min-width:0; }
 .row:hover, .row.sel { background:color-mix(in srgb, var(--fg) 7%, transparent); }
 .call > * { flex:none; } .row .words, .row .gist, .mark { color:var(--muted); } .row .fail { color:var(--c0); font-weight:600; }
 .row .gist { flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.thead > * { font-size:12px; }
+/* With every tool call shown, a thin bar under each step number: it starts where
+   the bar of the context's previous step ended, on a track as wide as the cell. */
+.tree.all .row .num { position:relative; padding-bottom:6px; }
+.tree.all .num.wf::before { content:''; position:absolute; left:0; right:0; bottom:1px; height:4px; border-radius:2px; background:var(--track); }
+.tree.all .num.wf i { position:absolute; bottom:1px; height:4px; border-radius:2px; min-width:2px; }
+.chip.small { width:8px; height:8px; border-radius:2px; margin:0 2px; }
+/* A click on a context's totals keeps its rows and dims the rest. */
+.tree.focus .row.dim, .tree.focus .detail.dim { opacity:.3; }
+/* Narrow screens drop the time and the duration bar. */
+@media (max-width: 640px) {
+  .row, .thead { grid-template-columns:7ch 7ch 8ch 7ch minmax(0, 1fr); column-gap:8px; }
+  .row > :nth-child(1), .row > :nth-child(3), .thead > :nth-child(1), .thead > :nth-child(3) { display:none; }
+  .row .call { flex-wrap:wrap; } .row .call > * { flex:0 1 auto; min-width:0; overflow-wrap:break-word; }
+  .row .gist { display:none; }
+}
 .detail { margin:2px 0 8px; padding:8px 10px; border-left:3px solid var(--line); white-space:pre-wrap; word-break:break-word; }
 .detail b { color:var(--muted); font-weight:500; display:inline-block; min-width:64px; }
 </style></head><body>
 <h1>Session <span id="sid"></span></h1>
 <div class="sub" id="subline"></div>
-<details class="intro"><summary>How to read this</summary><p>A sequence diagram of the session. Each vertical bar is one <b>context</b>: a conversation history the model reads. A Skill or Agent call that opens a new context is a message to a new bar, and the dashed message back carries its result. A new context starts with its prompt only and gets a color of its own; one that starts with a copy of its parent's history says so and keeps the parent's color. Rows are in time order, not to scale. To save width, a column holds one context at a time: when a context ends, a later one can reuse its column, so five runs of the same skill one after another sit in one column as five bars. Such a column's header is an outline with one chip per context, in time order and in the color of its bar; a chip without a name repeats the name before it. Next to the top of a context's bar are the tokens it spent over all its model calls, each of which sends the whole history again: new input, input read from the prompt cache (far cheaper), and output. Hover for the exact numbers. Click a message to see the call's arguments and result.</p>
+<details class="intro"><summary>How to read this</summary>
+<p>Each bar is a <b>context</b>: a conversation the model reads. A Skill or Agent call that opens a new context is a message to a new bar, and its result comes back as a dashed line. Rows run in time order, not to scale.</p>
+<p>Contexts that never overlap share a column. The top of each bar shows the tokens its model calls spent:</p>
+<ul>
+<li><b>new</b>: input that was not cached, plus cache writes</li>
+<li><b>cached</b>: history read from the prompt cache, far cheaper</li>
+<li><b>out</b>: model output</li>
+</ul>
+<p>The call tree lists the same calls with their costs. A bold row is a context, with its totals. With <b>every tool call</b> on, the rows inside it are its steps, and they add up to those totals:</p>
+<ul>
+<li>Each step shows the model call that came right after it: <b>new</b> for what it read that was not cached yet, <b>cached</b> for the history it read again, <b>out</b> for what it wrote next.</li>
+<li><b>prompt</b> is the context's first model call. A row with an arrow (&larr;) is where a context it started returned.</li>
+<li>The bar under a number starts where the previous step's bar ended, so each column fills from 0 to the context's total.</li>
+<li>A down arrow (&darr;) marks calls made together: the model call after them is on the last one.</li>
+</ul>
+<p>Click a context's totals to dim every other context; click again, or press Esc, to bring them back. Hover over a number for its exact value. Click a row for its arguments and result.</p>
 <div class="symbols" style="margin-top:8px">
   <span><svg width="34" height="12"><line x1="0" x2="26" y1="6" y2="6" stroke="var(--c0)" stroke-width="2"/><path d="M24 1 L34 6 L24 11 z" fill="var(--c0)"/></svg>call that starts a context</span>
   <span><svg width="34" height="12"><line x1="0" x2="32" y1="6" y2="6" stroke="var(--c0)" stroke-width="2"/><path d="M24 1 L34 6 L24 11" fill="none" stroke="var(--c0)" stroke-width="2"/></svg>one that runs in the background</span>
@@ -315,13 +346,16 @@ function drawSequence() {
 const kids = new Map();
 const containerKey = (ctx) => (ctx === 'main' || !D.calls.some((c) => c.child === ctx) ? `root` : ctx);
 const items = D.calls.map((c, i) => ({ type: 'call', i, start: c.start, ctx: c.ctx }))
-  .concat(D.markers.filter((m) => m.kind === 'compact').map((m) => ({ type: 'compact', m, start: m.at, ctx: m.ctx })));
+  .concat(D.markers.filter((m) => m.kind === 'compact').map((m) => ({ type: 'compact', m, start: m.at, ctx: m.ctx })))
+  .concat(D.ledger.map((m) => ({ type: 'step', m, start: m.at, ctx: m.ctx })));
 for (const it of items) {
   const key = containerKey(it.ctx);
   if (!kids.has(key)) kids.set(key, []);
   kids.get(key).push(it);
 }
-for (const list of kids.values()) list.sort((a, b) => a.start - b.start);
+// A prompt comes before the calls its model call made, which start at the same time.
+const rank = (it) => (it.type === 'step' ? (it.m.first ? -1 : 1) : 0);
+for (const list of kids.values()) list.sort((a, b) => a.start - b.start || rank(a) - rank(b));
 
 const ctxName = (id) => (byId.get(id) ? `${byId.get(id).label}${id === 'main' ? '' : ` (${short(id)})`}` : id);
 // An inline skill returns nothing: its text joins the caller's context, and
@@ -333,30 +367,57 @@ const resultText = (c) => (c.result ? c.result
 // The same square-root scale as the text tree: the longest call fills the bar.
 const barWidth = (ms, longest) => (longest && ms ? Math.max(1, Math.round(Math.sqrt(Math.min(ms, longest) / longest) * 66)) : 0);
 
+const COLUMNS = ['new', 'cached', 'out'];
+const blanks = '<span></span><span></span><span></span>';
+let focused;
+
+// A context's totals. A click on them focuses that context.
+const totalCells = (t, ctx, what) => COLUMNS.map((k) => `<span class="num tot" data-focus="${esc(ctx)}" title="${t[k]} ${k}, the total of this ${what}${ctx ? '. Click to dim the other contexts.' : ''}">${count(t[k])}</span>`).join('');
+
+// A step's own cost, with a bar from where the context's previous step ended.
+function stepCells(step, ctx) {
+  if (!step) return blanks;
+  if (step.shared) return COLUMNS.map(() => '<span class="num" title="made together with other calls: the model call after them is on the last one">&darr;</span>').join('');
+  const total = spentOf(ctx) || {};
+  return COLUMNS.map((k) => {
+    const bar = total[k] ? `<i style="left:${(100 * step.before[k] / total[k]).toFixed(2)}%;width:${(100 * step[k] / total[k]).toFixed(2)}%;background:${color(ctx)}"></i>` : '';
+    return `<span class="num wf" title="${step[k]} ${k} at this step. So far in this context: ${step.after[k]}${total[k] ? ` of ${total[k]}` : ''}.">+${count(step[k])}${bar}</span>`;
+  }).join('');
+}
+
 function drawTree() {
   const all = document.getElementById('all').checked;
   const shownCall = (c) => all || c.tool === 'Skill' || c.tool === 'Agent';
   const longest = Math.max(0, ...D.calls.filter(shownCall).map((c) => c.dur));
+  const totalRow = (label, t, ctx) => (t ? `<div class="row mark" data-ctx="${ctx}"><span></span><span></span><span></span>${totalCells(t, ctx, ctx ? 'context' : 'session')}`
+    + `<span class="call">${ctx ? `<i class="chip" style="background:${color(ctx)}"></i>` : ''}<b>${label}</b></span></div>` : '');
   let h = '<div class="thead"><span>time</span><span class="num">duration</span><span></span><span class="num">new</span><span class="num">cached</span><span class="num">out</span><span>call</span></div>';
   const walk = (key, depth) => (kids.get(key) || []).forEach((it) => {
     const pad = depth * 22;
     if (it.type === 'compact') {
-      h += `<div class="row mark"><span>${clock(it.m.at)}</span><span></span><span></span><span></span><span></span><span></span>`
+      h += `<div class="row mark" data-ctx="${esc(it.ctx)}"><span>${clock(it.m.at)}</span><span></span><span></span>${blanks}`
         + `<span class="call" style="padding-left:${pad}px">-- ${esc(short(it.ctx))} compacted (${esc(it.m.trigger || 'unknown trigger')})</span></div>`;
+      return;
+    }
+    if (it.type === 'step') {
+      if (!all) return;
+      h += `<div class="row mark" data-ctx="${esc(it.ctx)}"><span>${Number.isFinite(it.m.at) ? clock(it.m.at) : ''}</span><span></span><span></span>${stepCells(it.m.step, it.ctx)}`
+        + `<span class="call" style="padding-left:${pad}px"><i class="chip small" style="background:${color(it.ctx)}"></i><span>${it.m.back ? '&larr; ' : ''}${esc(it.m.label)}</span></span></div>`;
       return;
     }
     const c = D.calls[it.i];
     const shown = shownCall(c);
     if (shown) {
       const spent = c.child && spentOf(c.child);
-      const hue = color(c.child && byId.has(c.child) ? c.child : c.ctx);
-      h += `<div class="row" id="r${it.i}" data-i="${it.i}"><span class="muted">${clock(c.start)}</span><span class="num">${esc(took(c))}</span>`
+      const own = c.child && byId.has(c.child) ? c.child : c.ctx;
+      const hue = color(own);
+      h += `<div class="row" id="r${it.i}" data-i="${it.i}" data-ctx="${esc(own)}"><span class="muted">${clock(c.start)}</span><span class="num">${esc(took(c))}</span>`
         + `<span class="bar"><i style="width:${barWidth(c.running ? 0 : c.dur, longest)}px;background:${hue}"></i></span>`
-        + (spent ? [spent.new, spent.cached, spent.out].map((n) => `<span class="num" title="${n}">${count(n)}</span>`).join('') : '<span></span><span></span><span></span>')
+        + (spent ? totalCells(spent, c.child, 'context') : stepCells(all && c.step, c.ctx))
         + `<span class="call" style="padding-left:${pad}px"><i class="chip" style="background:${hue}"></i>`
         + `<span><b>${esc(c.name || kindWord(c.tool))}</b>${c.name ? ` (${esc(kindWord(c.tool))})` : ''}</span>`
         + `<span class="words">${esc(words(c))}</span>${c.ok ? '' : '<span class="fail">failed</span>'}<span class="gist">${esc(gist(c))}</span></span></div>`;
-      h += `<div class="detail" id="d${it.i}" hidden style="margin-left:${pad + 20}px;border-color:${color(c.ctx)}">`
+      h += `<div class="detail" id="d${it.i}" data-ctx="${esc(own)}" hidden style="margin-left:${pad + 20}px;border-color:${color(c.ctx)}">`
         + `<b>context</b>${esc(ctxName(c.ctx))}\n`
         + (c.ctxTokens ? `<b>history</b>${esc(tok(c.ctxTokens))} in the context when it made this call\n` : '')
         + (c.args ? `<b>args</b>${esc(c.args)}\n` : '')
@@ -364,8 +425,21 @@ function drawTree() {
     }
     if (c.child) walk(c.child, depth + (shown ? 1 : 0));
   });
+  h += totalRow('main context', D.totals.main, 'main');
   walk('root', 0);
-  document.getElementById('tree').innerHTML = h;
+  h += totalRow('session', D.totals.session, '');
+  const tree = document.getElementById('tree');
+  tree.innerHTML = h;
+  tree.classList.toggle('all', all);
+  focus(focused);
+}
+
+// Keeps the rows of one context and dims the rest; no context brings them all back.
+function focus(ctx) {
+  focused = ctx || undefined;
+  const tree = document.getElementById('tree');
+  tree.classList.toggle('focus', Boolean(focused));
+  tree.querySelectorAll('[data-ctx]').forEach((el) => el.classList.toggle('dim', Boolean(focused) && el.dataset.ctx !== focused));
 }
 
 function select(i, fromTimeline) {
@@ -377,7 +451,13 @@ function select(i, fromTimeline) {
   if (fromTimeline) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
-document.getElementById('tree').addEventListener('click', (e) => { const r = e.target.closest('.row'); if (r) select(r.dataset.i, false); });
+document.getElementById('tree').addEventListener('click', (e) => {
+  const total = e.target.closest('[data-focus]');
+  if (total) { if (total.dataset.focus) focus(total.dataset.focus === focused ? undefined : total.dataset.focus); return; }
+  const r = e.target.closest('.row');
+  if (r && r.dataset.i !== undefined) select(r.dataset.i, false);
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') focus(undefined); });
 document.getElementById('tl').addEventListener('click', (e) => {
   const b = e.target.closest('.hit');
   if (b && b.dataset.group) { expanded.add(Number(b.dataset.group)); drawSequence(); } else if (b) select(b.dataset.i, true);

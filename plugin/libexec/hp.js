@@ -285,26 +285,123 @@ function fillContextTokens(records) {
 // What a context spent, summed over its model calls. Each call sends the whole
 // history again: what the prompt cache already held is `cached`, the rest
 // (plain input and cache writes) is `new`, and the reply is `out`. They cost
-// different amounts, so they stay apart. One response can span several
-// transcript lines with the same message id.
+// different amounts, so they stay apart.
 function spentTokens(text) {
-  const seen = new Set();
-  const spend = { new: 0, cached: 0, out: 0, calls: 0 };
+  return sumRequests(requestsOf(text));
+}
+
+function sumRequests(requests) {
+  if (!requests.length) return undefined;
+  return requests.reduce((spend, r) => ({ new: spend.new + r.new, cached: spend.cached + r.cached, out: spend.out + r.out, calls: spend.calls + 1 }),
+    { new: 0, cached: 0, out: 0, calls: 0 });
+}
+
+// The LLM requests in one transcript, in order: their spend, and the tool calls
+// each one asked for. One response can span several transcript lines with the
+// same message id; each line carries one content block of it.
+function requestsOf(text) {
+  const byId = new Map();
+  const requests = [];
   for (const line of text.split('\n')) {
     if (!line.includes('"usage"')) continue;
     let entry;
     try { entry = JSON.parse(line); } catch { continue; }
     const message = entry && entry.type === 'assistant' && entry.message;
     if (!message || !message.usage) continue;
-    if (message.id && seen.has(message.id)) continue;
-    if (message.id) seen.add(message.id);
-    const u = message.usage;
-    spend.new += (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-    spend.cached += u.cache_read_input_tokens || 0;
-    spend.out += u.output_tokens || 0;
-    spend.calls += 1;
+    let request = message.id && byId.get(message.id);
+    if (!request) {
+      const u = message.usage;
+      request = {
+        id: message.id,
+        at: Date.parse(entry.timestamp),
+        new: (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0),
+        cached: u.cache_read_input_tokens || 0,
+        out: u.output_tokens || 0,
+        calls: [],
+      };
+      requests.push(request);
+      if (message.id) byId.set(message.id, request);
+    }
+    for (const c of Array.isArray(message.content) ? message.content : []) {
+      if (c && c.type === 'tool_use' && c.id) request.calls.push(c.id);
+    }
   }
-  return spend.calls ? spend : undefined;
+  return requests;
+}
+
+// Where each model call's tokens go in the tree. Every model call follows one
+// thing: a prompt, or the results of the calls made just before it. Its tokens
+// go on that row, so a context's rows sum to its totals:
+//   prompt             +6.3k new  +20.2k cached  +150 out   the context's first model call
+//   planner (skill)     +277      +26.5k         +194       the one that read the skill
+//   <- github returned  +490      +27.8k         +205       the one that read github's result
+// `new` is what the cache did not hold yet: usually the result, the whole
+// history after the cache expired. Calls made together share the model call
+// after them; the last to end carries it and the others are `shared`. A call
+// that starts a context keeps that context's totals on its own row, so its step
+// goes on a row of its own where it returned. A prompt sits at its model call's
+// timestamp. A transcript reduced to usage has none: then it sits at the first
+// call its model call made, or where the calls before it ended.
+function ledgerOf(records) {
+  const calls = uniqueCalls(records);
+  const byId = new Map(calls.filter((r) => r.tool_use_id).map((r) => [r.tool_use_id, r]));
+  const starterOf = new Map(calls.filter((r) => r.child_agent_id).map((r) => [r.child_agent_id, r]));
+  // A background call returns at once: what its caller reads next is the launch notice.
+  const endOf = (r) => (r.background ? startOf(r) + 1 : Date.parse(r.at));
+  const steps = new Map();
+  const rows = [];
+  for (const [ctx, requests] of ownRequests(records)) {
+    const own = calls.filter((r) => contextOf(r) === ctx);
+    const starter = starterOf.get(ctx);
+    const start = starter ? startOf(starter) : Math.min(...own.map(startOf), Infinity) - 1;
+    // A background child's report wakes its caller: the model call that follows
+    // no tool result, after such a child stopped, read that report.
+    const reporters = own.filter((r) => r.background && r.child_agent_id && !r.running);
+    let cursor = start;
+    let run = { new: 0, cached: 0, out: 0 };
+    requests.forEach((request, k) => {
+      const after = { new: run.new + request.new, cached: run.cached + request.cached, out: run.out + request.out };
+      const step = { new: request.new, cached: request.cached, out: request.out, before: run, after };
+      run = after;
+      const prev = requests[k - 1];
+      if (!prev || !prev.calls.length) {
+        const made = request.calls.map((id) => byId.get(id)).filter(Boolean);
+        const at = Number.isFinite(request.at) ? request.at : k === 0 ? start : made.length ? Math.min(...made.map(startOf)) : cursor;
+        const reporter = k > 0 && reporters.filter((r) => Date.parse(r.at) <= at).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+        if (reporter) reporters.splice(reporters.indexOf(reporter), 1);
+        const label = reporter ? `${reporter.name || DEFAULT_AGENT} reported` : k === 0 || ctx === MAIN ? 'prompt' : 'resumed';
+        rows.push({ kind: 'step', ctx, at, first: true, back: Boolean(reporter), label, step });
+        return;
+      }
+      const group = prev.calls.map((id) => byId.get(id)).filter(Boolean);
+      if (!group.length) {
+        rows.push({ kind: 'step', ctx, at: cursor, label: `${prev.calls.length} calls not recorded`, step });
+        return;
+      }
+      const last = group.reduce((a, b) => (endOf(b) >= endOf(a) ? b : a));
+      for (const r of group) steps.set(r.tool_use_id, r === last ? step : { shared: true });
+      cursor = Math.max(...group.map(endOf));
+    });
+  }
+  for (const r of calls) {
+    if (!r.child_agent_id || !steps.has(r.tool_use_id)) continue;
+    rows.push({ kind: 'step', ctx: contextOf(r), at: endOf(r), back: true, label: `${r.name || DEFAULT_AGENT} ${r.background ? 'launched' : 'returned'}`, step: steps.get(r.tool_use_id) });
+    steps.delete(r.tool_use_id);
+  }
+  return { steps, rows };
+}
+
+// spend comes from ownRequests, which counts each message id once, so a fork's
+// copy of its parent's request is not summed twice.
+function sessionTotals(spend) {
+  if (!spend.size) return undefined;
+  const total = { new: 0, cached: 0, out: 0 };
+  for (const s of spend.values()) {
+    total.new += s.new;
+    total.cached += s.cached;
+    total.out += s.out;
+  }
+  return total;
 }
 
 function spentByChild(payload, childId) {
@@ -323,12 +420,31 @@ function contextSpend(records) {
   for (const stop of subagentStops(records).values()) {
     if (stop.spend) spend.set(stop.agent_id, stop.spend);
   }
-  for (const { ctx, file } of transcriptFiles(records)) {
-    const text = readText(file);
-    const spent = text === undefined ? undefined : spentTokens(text);
+  for (const [ctx, requests] of ownRequests(records)) {
+    const spent = sumRequests(requests);
     if (spent) spend.set(ctx, spent);
   }
   return spend;
+}
+
+// context id -> its own model calls. A `fork` subagent's transcript starts with a
+// copy of the parent's model call that launched it, under the same message id:
+//   main        msg_A (calls fork)   msg_B
+//   fork        msg_A (the copy)     msg_C  msg_D   => the fork's own are C and D
+// Contexts are read parents first, and each message id counts once.
+function ownRequests(records) {
+  const files = new Map(transcriptFiles(records).map(({ ctx, file }) => [ctx, file]));
+  const order = new Set([...contextsOf(records).contexts.map((c) => c.id), ...files.keys()]);
+  const claimed = new Set();
+  const own = new Map();
+  for (const ctx of order) {
+    const text = files.has(ctx) ? readText(files.get(ctx)) : undefined;
+    if (text === undefined) continue;
+    const requests = requestsOf(text).filter((r) => !(r.id && claimed.has(r.id)));
+    for (const r of requests) if (r.id) claimed.add(r.id);
+    own.set(ctx, requests);
+  }
+  return own;
 }
 
 // Record fields in schema order; absent values are left out.
@@ -620,8 +736,10 @@ function buildForest(records, markers = []) {
   };
   for (const node of nodes) containerOf(node.record.agent_id, node.start, node.index, node.record.agent_type).push(node);
   for (const marker of markers) {
+    // A prompt comes before the calls its model call made, which start at the same time.
+    const index = marker.first ? -1 : Infinity;
     const ctx = marker.ctx === MAIN ? undefined : marker.ctx;
-    containerOf(ctx, marker.at, Infinity).push({ marker, start: marker.at, index: Infinity, children: [] });
+    containerOf(ctx, marker.at, index).push({ marker, start: marker.at, index, children: [] });
   }
   sortTree(roots);
   return roots;
@@ -669,7 +787,7 @@ const BAR_CELLS = 8;
 const RUNNING = 'running';
 const BAR_EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 const BAR_STEPS = BAR_EIGHTHS.length;
-const COLUMNS = [['time', 8, 'left'], ['duration', 8, 'right'], ['', BAR_CELLS, 'left'], ['new', 6, 'right'], ['cached', 7, 'right'], ['out', 6, 'right']];
+const COLUMNS = [['time', 8, 'left'], ['duration', 8, 'right'], ['', BAR_CELLS, 'left'], ['new', 7, 'right'], ['cached', 8, 'right'], ['out', 7, 'right']];
 const COLUMN_GAP = '  ';
 
 function cell(text, [, width, align]) {
@@ -689,14 +807,31 @@ function durationBar(ms, longest) {
   return '█'.repeat(Math.floor(steps / BAR_STEPS)) + BAR_EIGHTHS[steps % BAR_STEPS];
 }
 
+function totalLine(label, spend) {
+  return columns(['', '', '', formatCount(spend.new), formatCount(spend.cached), formatCount(spend.out)]) + label;
+}
+
 function treeHeader() {
   return columns(COLUMNS.map(([name]) => name)) + 'call';
 }
 
-function formatLine(node, depth, { verbose, kinds, colors, spend, longest }) {
+// A step's three cells: `+` marks a row's own cost, apart from a context's totals.
+// SHARED_STEP stands for calls made together: their model call is on the last of them.
+const SHARED_STEP = '↓';
+function stepCells(step) {
+  if (!step) return ['', '', ''];
+  if (step.shared) return [SHARED_STEP, SHARED_STEP, SHARED_STEP];
+  return [step.new, step.cached, step.out].map((n) => `+${formatCount(n)}`);
+}
+
+function formatLine(node, depth, { verbose, kinds, colors, spend, longest, ledger }) {
   const indent = '  '.repeat(depth);
   if (node.placeholder) {
     return columns([]) + paint(`${indent}${callLabel('Agent', node.agentType || DEFAULT_AGENT)} [${shortId(node.agent)}] parent not recorded`, node.agent, colors);
+  }
+  if (node.marker && node.marker.kind === 'step') {
+    const m = node.marker;
+    return columns([Number.isFinite(m.at) ? clock(m.at) : '', '', '', ...stepCells(m.step)]) + paint(`${indent}${m.back ? '<- ' : ''}${m.label}`, m.ctx, colors);
   }
   if (node.marker) {
     const m = node.marker;
@@ -706,7 +841,8 @@ function formatLine(node, depth, { verbose, kinds, colors, spend, longest }) {
   const ctx = contextOf(r);
   const ms = r.running ? 0 : r.duration_ms || 0;
   const spent = r.child_agent_id && spend.get(r.child_agent_id);
-  const prefix = columns([clock(node.start), r.running ? RUNNING : formatDuration(ms), durationBar(ms, longest), ...(spent ? [spent.new, spent.cached, spent.out].map(formatCount) : [])]);
+  const spentCells = spent ? [spent.new, spent.cached, spent.out].map(formatCount) : stepCells(verbose && ledger.steps.get(r.tool_use_id));
+  const prefix = columns([clock(node.start), r.running ? RUNNING : formatDuration(ms), durationBar(ms, longest), ...spentCells]);
   const words = [contextWords(r, kinds), r.ok === false ? 'failed' : ''].filter(Boolean).join(' ');
   const head = `${indent}${callLabel(r.tool, r.name)}`;
   const plainHead = words ? `${head} ${words}` : head;
@@ -723,7 +859,13 @@ function ansiColors(contexts) {
 
 function renderTree(records, { verbose = false, color = false } = {}) {
   const { contexts, markers } = contextsOf(records);
-  const options = { verbose, kinds: new Map(contexts.map((c) => [c.id, c.kind])), colors: color ? ansiColors(contexts) : undefined, spend: contextSpend(records) };
+  const options = {
+    verbose,
+    kinds: new Map(contexts.map((c) => [c.id, c.kind])),
+    colors: color ? ansiColors(contexts) : undefined,
+    spend: contextSpend(records),
+    ledger: verbose ? ledgerOf(records) : { steps: new Map(), rows: [] },
+  };
   const shown = [];
   const walk = (nodes, depth) => {
     for (const node of nodes) {
@@ -732,9 +874,16 @@ function renderTree(records, { verbose = false, color = false } = {}) {
       walk(node.children, depth + 1);
     }
   };
-  walk(buildForest(records, markers.filter((m) => m.kind === 'compact')), 0);
+  walk(buildForest(records, [...markers.filter((m) => m.kind === 'compact'), ...options.ledger.rows]), 0);
   options.longest = Math.max(0, ...shown.map(([node]) => (node.record && node.record.duration_ms) || 0));
-  return [treeHeader(), ...shown.map(([node, depth]) => formatLine(node, depth, options))].join('\n');
+  const main = options.spend.get(MAIN);
+  const totals = sessionTotals(options.spend);
+  return [
+    treeHeader(),
+    ...(main ? [totalLine('main context', main)] : []),
+    ...shown.map(([node, depth]) => formatLine(node, depth, options)),
+    ...(totals ? [totalLine('session', totals)] : []),
+  ].join('\n');
 }
 
 // One self-contained page: the template from libexec/ with the trace inlined.
@@ -743,15 +892,21 @@ function renderHtml(session) {
   const calls = uniqueCalls(fillContextTokens(session.records));
   const { contexts, markers } = contextsOf(session.records);
   const spend = contextSpend(session.records);
+  const ledger = ledgerOf(session.records);
   const data = {
     session: session.id,
     branch: (calls.find((r) => r.branch) || {}).branch,
     contexts: contexts.map((c) => ({ ...c, spent: spend.get(c.id) })),
     markers,
-    calls: calls.map((r) => ({
-      ctx: contextOf(r), tool: r.tool, name: r.name, start: startOf(r), dur: r.duration_ms || 0,
-      ok: r.ok !== false, ctxTokens: r.context_tokens, args: r.args, result: r.result, child: r.child_agent_id, background: r.background, running: r.running,
-    })),
+    totals: { main: spend.get(MAIN), session: sessionTotals(spend) },
+    ledger: ledger.rows,
+    calls: calls.map((r) => {
+      return {
+        ctx: contextOf(r), tool: r.tool, name: r.name, start: startOf(r), dur: r.duration_ms || 0,
+        ok: r.ok !== false, ctxTokens: r.context_tokens, args: r.args, result: r.result, child: r.child_agent_id, background: r.background, running: r.running,
+        step: ledger.steps.get(r.tool_use_id),
+      };
+    }),
   };
   const json = JSON.stringify(data).replace(/</g, '\\u003c');
   const template = fs.readFileSync(path.join(__dirname, VIEW_TEMPLATE), 'utf8');
