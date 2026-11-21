@@ -10,10 +10,10 @@ const demo = () => captureFixture('claude-web.jsonl', { times: WEB_RECEIVED_S })
 
 test('demo session, Skill and Agent calls only', () => {
   assert.equal(renderTree(demo()), [
-    'time     duration             new  cached    out  call',
-    '16:21:08     7 ms ▎                               greet (skill) inline',
-    '16:21:11     10 s ████████                        review (skill) new context a3628f -> PASS: notes.txt has 3 lines.',
-    '16:21:23    7.0 s ██████▋                         counter (agent) new context a0b843 (Count words in notes.txt: Count the …) -> 3',
+    'time     duration              new   cached     out  call',
+    '16:21:08     7 ms ▎                                  greet (skill) inline',
+    '16:21:11     10 s ████████                           review (skill) new context a3628f -> PASS: notes.txt has 3 lines.',
+    '16:21:23    7.0 s ██████▋                            counter (agent) new context a0b843 (Count words in notes.txt: Count th…) -> 3',
   ].join('\n'));
 });
 

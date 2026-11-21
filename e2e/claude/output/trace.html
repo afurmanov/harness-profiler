@@ -3,17 +3,17 @@
 <title>Harness trace</title>
 <!-- Written by harness-profiler (`hp tree --format html`). Self-contained: no network, works from file://. -->
 <style>
-:root { --bg:#f7f7f5; --fg:#1d2329; --muted:#66707a; --line:#dcdfe2; --panel:#fff; --track:#f1f2f0; --fresh:#8d969e;
+:root { --bg:#f7f7f5; --fg:#1d2329; --muted:#66707a; --line:#dcdfe2; --panel:#fff; --track:#e9ebe8; --fresh:#8d969e;
   --c0:#c55e5d; --c1:#2f7f86; --c2:#b07d1f; --c3:#6c58b5; --c4:#3f8a4a; --c5:#b0517f; --c6:#3d6fb3; --c7:#8a6a4f;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --sans: system-ui, -apple-system, "Segoe UI", sans-serif; }
-@media (prefers-color-scheme: dark) { :root { --bg:#14181c; --fg:#e2e6ea; --muted:#9aa4ad; --line:#2b3238; --panel:#1b2025; --track:#20262b; --fresh:#79828a;
+@media (prefers-color-scheme: dark) { :root { --bg:#14181c; --fg:#e2e6ea; --muted:#9aa4ad; --line:#2b3238; --panel:#1b2025; --track:#262d33; --fresh:#79828a;
   --c0:#e07d7b; --c1:#4fb0b8; --c2:#d6a542; --c3:#9b89e0; --c4:#6cc07a; --c5:#dd7fae; --c6:#6f9ee0; --c7:#c29a76; color-scheme: dark; } }
 body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 var(--sans); padding:24px max(16px, 3vw); }
 h1 { font-size:18px; margin:0 0 2px; } h2 { font-size:14px; margin:22px 0 8px; }
 .sub { color:var(--muted); font:12px var(--mono); margin-bottom:10px; }
 .intro { max-width:760px; margin:0 0 14px; color:var(--fg); }
 .intro summary { cursor:pointer; color:var(--muted); font-size:12px; }
-.intro p { margin:6px 0 0; }
+.intro p { margin:6px 0 0; } .intro ul { margin:6px 0 0; padding-left:20px; } .intro li { margin:2px 0; }
 .chip { width:12px; height:12px; border-radius:3px; display:inline-block; flex:none; align-self:center; }
 .symbols { display:flex; flex-wrap:wrap; gap:6px 20px; font-size:12px; color:var(--muted); margin:0 0 14px; }
 .symbols span { display:inline-flex; align-items:center; gap:6px; }
@@ -26,19 +26,50 @@ svg .flabel { font:11px var(--sans); fill:#fff; pointer-events:none; } svg .fail
 svg .spawn rect { stroke:var(--panel); stroke-width:1; }
 .toolbar { margin:0 0 8px; display:flex; align-items:center; gap:16px; font-size:13px; color:var(--muted); }
 .tree { font:13px/1.45 var(--mono); }
-.row, .thead { display:grid; grid-template-columns:8ch 7ch 66px 6.5ch 7.5ch 6.5ch minmax(0, 1fr); column-gap:10px; align-items:baseline; padding:3px 6px; border-radius:4px; }
-.row { cursor:pointer; } .row.mark { cursor:default; } .tree .muted { color:var(--muted); } .thead { color:var(--muted); font-size:12px; border-bottom:1px solid var(--line); border-radius:0; margin-bottom:2px; }
-.num { text-align:right; color:var(--muted); } .bar { height:6px; align-self:center; display:flex; } .bar i { height:6px; border-radius:2px; }
+.row, .thead { display:grid; grid-template-columns:8ch 7ch 66px 7ch 8ch 7ch minmax(0, 1fr); column-gap:10px; align-items:baseline; padding:3px 6px; border-radius:4px; }
+.row { cursor:pointer; } .row.mark { cursor:default; } .tree .muted { color:var(--muted); } .thead { color:var(--muted); font-size:13px; border-bottom:1px solid var(--line); border-radius:0; margin-bottom:2px; }
+.num { text-align:right; color:var(--muted); font-variant-numeric:tabular-nums; } .num.tot { color:var(--fg); font-weight:600; cursor:pointer; } .num.tot:hover { text-decoration:underline; } .bar { height:6px; align-self:center; display:flex; } .bar i { height:6px; border-radius:2px; }
 .call { display:flex; gap:8px; align-items:baseline; min-width:0; }
 .row:hover, .row.sel { background:color-mix(in srgb, var(--fg) 7%, transparent); }
 .call > * { flex:none; } .row .words, .row .gist, .mark { color:var(--muted); } .row .fail { color:var(--c0); font-weight:600; }
 .row .gist { flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.thead > * { font-size:12px; }
+/* With every tool call shown, a thin bar under each step number: it starts where
+   the bar of the context's previous step ended, on a track as wide as the cell. */
+.tree.all .row .num { position:relative; padding-bottom:6px; }
+.tree.all .num.wf::before { content:''; position:absolute; left:0; right:0; bottom:1px; height:4px; border-radius:2px; background:var(--track); }
+.tree.all .num.wf i { position:absolute; bottom:1px; height:4px; border-radius:2px; min-width:2px; }
+.chip.small { width:8px; height:8px; border-radius:2px; margin:0 2px; }
+/* A click on a context's totals keeps its rows and dims the rest. */
+.tree.focus .row.dim, .tree.focus .detail.dim { opacity:.3; }
+/* Narrow screens drop the time and the duration bar. */
+@media (max-width: 640px) {
+  .row, .thead { grid-template-columns:7ch 7ch 8ch 7ch minmax(0, 1fr); column-gap:8px; }
+  .row > :nth-child(1), .row > :nth-child(3), .thead > :nth-child(1), .thead > :nth-child(3) { display:none; }
+  .row .call { flex-wrap:wrap; } .row .call > * { flex:0 1 auto; min-width:0; overflow-wrap:break-word; }
+  .row .gist { display:none; }
+}
 .detail { margin:2px 0 8px; padding:8px 10px; border-left:3px solid var(--line); white-space:pre-wrap; word-break:break-word; }
 .detail b { color:var(--muted); font-weight:500; display:inline-block; min-width:64px; }
 </style></head><body>
 <h1>Session <span id="sid"></span></h1>
 <div class="sub" id="subline"></div>
-<details class="intro"><summary>How to read this</summary><p>A sequence diagram of the session. Each vertical bar is one <b>context</b>: a conversation history the model reads. A Skill or Agent call that opens a new context is a message to a new bar, and the dashed message back carries its result. A new context starts with its prompt only and gets a color of its own; one that starts with a copy of its parent's history says so and keeps the parent's color. Rows are in time order, not to scale. To save width, a column holds one context at a time: when a context ends, a later one can reuse its column, so five runs of the same skill one after another sit in one column as five bars. Such a column's header is an outline with one chip per context, in time order and in the color of its bar; a chip without a name repeats the name before it. Next to the top of a context's bar are the tokens it spent over all its model calls, each of which sends the whole history again: new input, input read from the prompt cache (far cheaper), and output. Hover for the exact numbers. Click a message to see the call's arguments and result.</p>
+<details class="intro"><summary>How to read this</summary>
+<p>Each bar is a <b>context</b>: a conversation the model reads. A Skill or Agent call that opens a new context is a message to a new bar, and its result comes back as a dashed line. Rows run in time order, not to scale.</p>
+<p>Contexts that never overlap share a column. The top of each bar shows the tokens its model calls spent:</p>
+<ul>
+<li><b>new</b>: input that was not cached, plus cache writes</li>
+<li><b>cached</b>: history read from the prompt cache, far cheaper</li>
+<li><b>out</b>: model output</li>
+</ul>
+<p>The call tree lists the same calls with their costs. A bold row is a context, with its totals. With <b>every tool call</b> on, the rows inside it are its steps, and they add up to those totals:</p>
+<ul>
+<li>Each step shows the model call that came right after it: <b>new</b> for what it read that was not cached yet, <b>cached</b> for the history it read again, <b>out</b> for what it wrote next.</li>
+<li><b>prompt</b> is the context's first model call. A row with an arrow (&larr;) is where a context it started returned.</li>
+<li>The bar under a number starts where the previous step's bar ended, so each column fills from 0 to the context's total.</li>
+<li>A down arrow (&darr;) marks calls made together: the model call after them is on the last one.</li>
+</ul>
+<p>Click a context's totals to dim every other context; click again, or press Esc, to bring them back. Hover over a number for its exact value. Click a row for its arguments and result.</p>
 <div class="symbols" style="margin-top:8px">
   <span><svg width="34" height="12"><line x1="0" x2="26" y1="6" y2="6" stroke="var(--c0)" stroke-width="2"/><path d="M24 1 L34 6 L24 11 z" fill="var(--c0)"/></svg>call that starts a context</span>
   <span><svg width="34" height="12"><line x1="0" x2="32" y1="6" y2="6" stroke="var(--c0)" stroke-width="2"/><path d="M24 1 L34 6 L24 11" fill="none" stroke="var(--c0)" stroke-width="2"/></svg>one that runs in the background</span>
@@ -54,7 +85,7 @@ svg .spawn rect { stroke:var(--panel); stroke-width:1; }
 <div class="tree" id="tree"></div>
 <script>
 'use strict';
-const D = {"session":"10b7ecea-8de9-405b-b845-9c3666503c6b","branch":"main","contexts":[{"id":"main","kind":"root","label":"main","hue":0,"spent":{"new":33923,"cached":661074,"out":2070,"calls":15}},{"id":"a29e3961121d5b20f","parent":"main","kind":"fresh","label":"watcher (agent)","name":"watcher","tool":"Agent","start":1794363485197,"end":1794363488865,"hue":1,"spent":{"new":6833,"cached":40873,"out":250,"calls":2}},{"id":"a76046789151ff382","parent":"main","kind":"fresh","label":"estimator (agent)","name":"estimator","tool":"Agent","start":1794363493174,"end":1794363499898,"hue":2,"spent":{"new":7202,"cached":46285,"out":435,"calls":2}},{"id":"a42f9fc34a9705486","parent":"main","kind":"fresh","label":"validator (skill)","name":"validator","tool":"Skill","start":1794363509430,"end":1794363517721,"hue":3,"spent":{"new":7580,"cached":101698,"out":570,"calls":4}},{"id":"ab0c6cfa72e7dc42e","parent":"main","kind":"copy","label":"fork (agent)","name":"fork","tool":"Agent","start":1794363521083,"end":1794363525582,"hue":0,"spent":{"new":1169,"cached":143043,"out":372,"calls":3}},{"id":"af7a52b909af34e47","parent":"main","kind":"fresh","label":"general-purpose (agent)","name":"general-purpose","tool":"Agent","start":1794363523097,"end":1794363527828,"hue":4,"spent":{"new":6998,"cached":47104,"out":321,"calls":2}},{"id":"a1505849fed2cf3cf","parent":"main","kind":"fresh","label":"validator (skill)","name":"validator","tool":"Skill","start":1794363562808,"end":1794363568037,"hue":5,"spent":{"new":7226,"cached":74209,"out":320,"calls":3}}],"markers":[{"kind":"inline","ctx":"main","at":1794363482713,"name":"orchestrator"},{"kind":"inline","ctx":"main","at":1794363490656,"name":"planner"},{"kind":"inline","ctx":"main","at":1794363502155,"name":"implementor"},{"kind":"inline","ctx":"a42f9fc34a9705486","at":1794363510994,"name":"checklist"},{"kind":"compact","ctx":"main","at":1794363534193,"trigger":"manual"},{"kind":"inline","ctx":"a1505849fed2cf3cf","at":1794363564461,"name":"checklist"}],"calls":[{"ctx":"main","tool":"Skill","name":"orchestrator","start":1794363482713,"dur":7,"ok":true,"ctxTokens":43938},{"ctx":"main","tool":"Agent","name":"watcher","start":1794363485197,"dur":3668,"ok":true,"ctxTokens":44283,"args":"Watch epic for new stories: Find the stories still marked new in stories.md in /work/fixture and report them back (name and full text of each new story).","result":"`grep '\\[new\\]' stories.md` output (one line, from /work/fixture/stories.md):","child":"a29e3961121d5b20f","background":true},{"ctx":"a29e3961121d5b20f","tool":"Bash","name":"grep '\\[new\\]' /work/fixture/stories.md","start":1794363486888,"dur":48,"ok":true,"ctxTokens":23754,"args":"grep '\\[new\\]' /work/fixture/stories.md","result":"- [new] Add a search box to the header. Done when index.html has one input with id \"search\"."},{"ctx":"main","tool":"Skill","name":"planner","start":1794363490656,"dur":5,"ok":true,"ctxTokens":45555,"args":"Add a search box to the header. Done when index.html has one input with id \"search\"."},{"ctx":"a76046789151ff382","tool":"Bash","name":"wc -w stories.md; ls; grep -n -i 'header\\|search' index.html 2>/dev/null | head","start":1794363497767,"dur":21,"ok":true,"ctxTokens":26512,"args":"wc -w stories.md; ls; grep -n -i 'header\\|search' index.html 2>/dev/null | head","result":"21 stories.md"},{"ctx":"main","tool":"Agent","name":"estimator","start":1794363493174,"dur":6724,"ok":true,"ctxTokens":45809,"args":"Size the search box story: Size this story: \"Add a search box to the header. Done when index.html has one input with id \"search\".\" The project is at /work/fixture. Reply with a size (S/M/L) and…","result":"S — the story is a single-line addition of one `\u003cinput id=\"search\">` inside the existing `\u003cheader>` in /work/fixture/index.html, with a trivially checkable done condition and no logic or dependencies.","child":"a76046789151ff382"},{"ctx":"main","tool":"Skill","name":"implementor","start":1794363502155,"dur":8,"ok":true,"ctxTokens":46381,"args":"Add a search box to the header. Done when index.html has one input with id \"search\". Plan: add one \u003cinput id=\"search\"> inside the existing header in index.html. Size: S."},{"ctx":"main","tool":"Read","start":1794363503664,"dur":7,"ok":true,"ctxTokens":46761,"args":"{\"file_path\":\"/work/fixture/index.html\"}"},{"ctx":"main","tool":"Edit","start":1794363506000,"dur":17,"ok":true,"ctxTokens":46953,"args":"{\"file_path\":\"/work/fixture/index.html\",\"old_string\":\"\u003ch1>Shop\u003c/h1>\\n\u003c/header>\",\"new_string\":\"\u003ch1>Shop\u003c/h1>\\n\u003cinput id=\\\"search\\\" type=\\\"search\\\" placeholder=\\\"Search\\\">\\n\u003c/header>\",\"replace_al…"},{"ctx":"main","tool":"Bash","name":"false","start":1794363507472,"dur":18,"ok":false,"ctxTokens":47196,"args":"false","result":"Exit code 1"},{"ctx":"a42f9fc34a9705486","tool":"Skill","name":"checklist","start":1794363510994,"dur":3,"ok":true,"ctxTokens":26936},{"ctx":"a42f9fc34a9705486","tool":"Bash","name":"cat /work/fixture/stories.md; echo \"---COUNT---\"; grep -c 'id=\"search\"' /…","start":1794363513083,"dur":30,"ok":true,"ctxTokens":27188,"args":"cat /work/fixture/stories.md; echo \"---COUNT---\"; grep -c 'id=\"search\"' /work/fixture/index.html","result":"# Epic: search"},{"ctx":"a42f9fc34a9705486","tool":"Bash","name":"grep -n 'id=\"search\"' /work/fixture/index.html; echo \"---HEADER---\"; grep…","start":1794363515875,"dur":27,"ok":true,"ctxTokens":27440,"args":"grep -n 'id=\"search\"' /work/fixture/index.html; echo \"---HEADER---\"; grep -n -i 'header' /work/fixture/index.html","result":"6:\u003cinput id=\"search\" type=\"search\" placeholder=\"Search\">"},{"ctx":"main","tool":"Skill","name":"validator","start":1794363509430,"dur":8291,"ok":true,"ctxTokens":47321,"args":"Add a search box to the header. Done when index.html has one input with id \"search\".","result":"PASS — /work/fixture/index.html contains exactly one `\u003cinput id=\"search\">` (grep count = 1), and it sits inside the `\u003cheader>` element (line 6, between `\u003cheader>` on line 4 and `\u003c/header>` on line 7), matching the story's done condition.","child":"a42f9fc34a9705486"},{"ctx":"ab0c6cfa72e7dc42e","tool":"Bash","name":"wc -l /work/fixture/stories.md","start":1794363523063,"dur":32,"ok":true,"ctxTokens":48206,"args":"wc -l /work/fixture/stories.md","result":"3 /work/fixture/stories.md"},{"ctx":"main","tool":"Agent","name":"fork","start":1794363521083,"dur":4499,"ok":true,"ctxTokens":47584,"args":"Fork: first question + wc -l: Answer this question from the conversation context you inherited: \"what was the first thing the user asked in this conversation?\" Then run `wc -l stories.md` in /tmp/tmp…","result":"**First thing the user asked:** to do three things in order: 1) use the orchestrator skill and follow all its steps; 2) in one message, start two subagents in parallel in the foreground, a `fork` subagent answering \"what was the first thing the user asked in this conversation?\" and running `wc -l s…","child":"ab0c6cfa72e7dc42e"},{"ctx":"af7a52b909af34e47","tool":"Bash","name":"wc -c stories.md","start":1794363525603,"dur":39,"ok":true,"ctxTokens":26936,"args":"wc -c stories.md","result":"109 stories.md"},{"ctx":"main","tool":"Agent","name":"general-purpose","start":1794363523097,"dur":4731,"ok":true,"ctxTokens":47584,"args":"General: first question + wc -c: Answer this question: \"what was the first thing the user asked in this conversation?\" You start with a fresh context, so if you cannot know the answer, say so plainly…","result":"**Answer to the question:** I cannot know what the user first asked in this conversation. I started with a fresh context and only see the single message that launched me; no earlier turns are visible to me, so I won't guess.","child":"af7a52b909af34e47"},{"ctx":"a1505849fed2cf3cf","tool":"Skill","name":"checklist","start":1794363564461,"dur":5,"ok":true,"ctxTokens":26903},{"ctx":"a1505849fed2cf3cf","tool":"Bash","name":"cat /work/fixture/stories.md; echo \"---COUNT---\"; grep -c 'id=\"search\"' /…","start":1794363566337,"dur":58,"ok":true,"ctxTokens":27140,"args":"cat /work/fixture/stories.md; echo \"---COUNT---\"; grep -c 'id=\"search\"' /work/fixture/index.html","result":"# Epic: search"},{"ctx":"main","tool":"Skill","name":"validator","start":1794363562808,"dur":5229,"ok":true,"ctxTokens":46241,"result":"PASS — `grep -c 'id=\"search\"' index.html` returns exactly 1, matching the story's done condition (one input with id \"search\" in /work/fixture/index.html).","child":"a1505849fed2cf3cf"},{"ctx":"main","tool":"Read","start":1794363569251,"dur":10,"ok":true,"ctxTokens":46457,"args":"{\"file_path\":\"/work/fixture/index.html\"}"}]};
+const D = {"session":"10b7ecea-8de9-405b-b845-9c3666503c6b","branch":"main","contexts":[{"id":"main","kind":"root","label":"main","hue":0,"spent":{"new":33923,"cached":661074,"out":2070,"calls":15}},{"id":"a29e3961121d5b20f","parent":"main","kind":"fresh","label":"watcher (agent)","name":"watcher","tool":"Agent","start":1794363485197,"end":1794363488865,"hue":1,"spent":{"new":6833,"cached":40873,"out":250,"calls":2}},{"id":"a76046789151ff382","parent":"main","kind":"fresh","label":"estimator (agent)","name":"estimator","tool":"Agent","start":1794363493174,"end":1794363499898,"hue":2,"spent":{"new":7202,"cached":46285,"out":435,"calls":2}},{"id":"a42f9fc34a9705486","parent":"main","kind":"fresh","label":"validator (skill)","name":"validator","tool":"Skill","start":1794363509430,"end":1794363517721,"hue":3,"spent":{"new":7580,"cached":101698,"out":570,"calls":4}},{"id":"ab0c6cfa72e7dc42e","parent":"main","kind":"copy","label":"fork (agent)","name":"fork","tool":"Agent","start":1794363521083,"end":1794363525582,"hue":0,"spent":{"new":874,"cached":95754,"out":316,"calls":2}},{"id":"af7a52b909af34e47","parent":"main","kind":"fresh","label":"general-purpose (agent)","name":"general-purpose","tool":"Agent","start":1794363523097,"end":1794363527828,"hue":4,"spent":{"new":6998,"cached":47104,"out":321,"calls":2}},{"id":"a1505849fed2cf3cf","parent":"main","kind":"fresh","label":"validator (skill)","name":"validator","tool":"Skill","start":1794363562808,"end":1794363568037,"hue":5,"spent":{"new":7226,"cached":74209,"out":320,"calls":3}}],"markers":[{"kind":"inline","ctx":"main","at":1794363482713,"name":"orchestrator"},{"kind":"inline","ctx":"main","at":1794363490656,"name":"planner"},{"kind":"inline","ctx":"main","at":1794363502155,"name":"implementor"},{"kind":"inline","ctx":"a42f9fc34a9705486","at":1794363510994,"name":"checklist"},{"kind":"compact","ctx":"main","at":1794363534193,"trigger":"manual"},{"kind":"inline","ctx":"a1505849fed2cf3cf","at":1794363564461,"name":"checklist"}],"totals":{"main":{"new":33923,"cached":661074,"out":2070,"calls":15},"session":{"new":70636,"cached":1066997,"out":4282}},"ledger":[{"kind":"step","ctx":"main","at":1794363482712,"first":true,"back":false,"label":"prompt","step":{"new":17279,"cached":26659,"out":152,"before":{"new":0,"cached":0,"out":0},"after":{"new":17279,"cached":26659,"out":152}}},{"kind":"step","ctx":"main","at":1794363490656,"first":true,"back":true,"label":"watcher reported","step":{"new":695,"cached":44860,"out":113,"before":{"new":18237,"cached":114876,"out":357},"after":{"new":18932,"cached":159736,"out":470}}},{"kind":"step","ctx":"main","at":1794363562808,"first":true,"back":false,"label":"prompt","step":{"new":10959,"cached":35282,"out":67,"before":{"new":22531,"cached":533128,"out":1886},"after":{"new":33490,"cached":568410,"out":1953}}},{"kind":"step","ctx":"a29e3961121d5b20f","at":1794363485197,"first":true,"back":false,"label":"prompt","step":{"new":6633,"cached":17121,"out":112,"before":{"new":0,"cached":0,"out":0},"after":{"new":6633,"cached":17121,"out":112}}},{"kind":"step","ctx":"a76046789151ff382","at":1794363493174,"first":true,"back":false,"label":"prompt","step":{"new":6737,"cached":19775,"out":355,"before":{"new":0,"cached":0,"out":0},"after":{"new":6737,"cached":19775,"out":355}}},{"kind":"step","ctx":"a42f9fc34a9705486","at":1794363509430,"first":true,"back":false,"label":"prompt","step":{"new":6766,"cached":20170,"out":113,"before":{"new":0,"cached":0,"out":0},"after":{"new":6766,"cached":20170,"out":113}}},{"kind":"step","ctx":"ab0c6cfa72e7dc42e","at":1794363521083,"first":true,"back":false,"label":"prompt","step":{"new":654,"cached":47552,"out":130,"before":{"new":0,"cached":0,"out":0},"after":{"new":654,"cached":47552,"out":130}}},{"kind":"step","ctx":"af7a52b909af34e47","at":1794363523097,"first":true,"back":false,"label":"prompt","step":{"new":6766,"cached":20170,"out":165,"before":{"new":0,"cached":0,"out":0},"after":{"new":6766,"cached":20170,"out":165}}},{"kind":"step","ctx":"a1505849fed2cf3cf","at":1794363562808,"first":true,"back":false,"label":"prompt","step":{"new":6733,"cached":20170,"out":98,"before":{"new":0,"cached":0,"out":0},"after":{"new":6733,"cached":20170,"out":98}}},{"kind":"step","ctx":"main","at":1794363485198,"back":true,"label":"watcher launched","step":{"new":611,"cached":44281,"out":27,"before":{"new":17626,"cached":70595,"out":330},"after":{"new":18237,"cached":114876,"out":357}}},{"kind":"step","ctx":"main","at":1794363499898,"back":true,"label":"estimator returned","step":{"new":574,"cached":45807,"out":163,"before":{"new":19190,"cached":205287,"out":675},"after":{"new":19764,"cached":251094,"out":838}}},{"kind":"step","ctx":"main","at":1794363517721,"back":true,"label":"validator returned","step":{"new":295,"cached":47289,"out":486,"before":{"new":20802,"cached":438287,"out":1271},"after":{"new":21097,"cached":485576,"out":1757}}},{"kind":"step","ctx":"main","at":1794363525582,"back":true,"label":"fork returned","step":{"shared":true}},{"kind":"step","ctx":"main","at":1794363527828,"back":true,"label":"general-purpose returned","step":{"new":1434,"cached":47552,"out":129,"before":{"new":21097,"cached":485576,"out":1757},"after":{"new":22531,"cached":533128,"out":1886}}},{"kind":"step","ctx":"main","at":1794363568037,"back":true,"label":"validator returned","step":{"new":218,"cached":46239,"out":71,"before":{"new":33490,"cached":568410,"out":1953},"after":{"new":33708,"cached":614649,"out":2024}}}],"calls":[{"ctx":"main","tool":"Skill","name":"orchestrator","start":1794363482713,"dur":7,"ok":true,"ctxTokens":43938,"step":{"new":347,"cached":43936,"out":178,"before":{"new":17279,"cached":26659,"out":152},"after":{"new":17626,"cached":70595,"out":330}}},{"ctx":"main","tool":"Agent","name":"watcher","start":1794363485197,"dur":3668,"ok":true,"ctxTokens":44283,"args":"Watch epic for new stories: Find the stories still marked new in stories.md in /work/fixture and report them back (name and full text of each new story).","result":"`grep '\\[new\\]' stories.md` output (one line, from /work/fixture/stories.md):","child":"a29e3961121d5b20f","background":true},{"ctx":"a29e3961121d5b20f","tool":"Bash","name":"grep '\\[new\\]' /work/fixture/stories.md","start":1794363486888,"dur":48,"ok":true,"ctxTokens":23754,"args":"grep '\\[new\\]' /work/fixture/stories.md","result":"- [new] Add a search box to the header. Done when index.html has one input with id \"search\".","step":{"new":200,"cached":23752,"out":138,"before":{"new":6633,"cached":17121,"out":112},"after":{"new":6833,"cached":40873,"out":250}}},{"ctx":"main","tool":"Skill","name":"planner","start":1794363490656,"dur":5,"ok":true,"ctxTokens":45555,"args":"Add a search box to the header. Done when index.html has one input with id \"search\".","step":{"new":258,"cached":45551,"out":205,"before":{"new":18932,"cached":159736,"out":470},"after":{"new":19190,"cached":205287,"out":675}}},{"ctx":"a76046789151ff382","tool":"Bash","name":"wc -w stories.md; ls; grep -n -i 'header\\|search' index.html 2>/dev/null | head","start":1794363497767,"dur":21,"ok":true,"ctxTokens":26512,"args":"wc -w stories.md; ls; grep -n -i 'header\\|search' index.html 2>/dev/null | head","result":"21 stories.md","step":{"new":465,"cached":26510,"out":80,"before":{"new":6737,"cached":19775,"out":355},"after":{"new":7202,"cached":46285,"out":435}}},{"ctx":"main","tool":"Agent","name":"estimator","start":1794363493174,"dur":6724,"ok":true,"ctxTokens":45809,"args":"Size the search box story: Size this story: \"Add a search box to the header. Done when index.html has one input with id \"search\".\" The project is at /work/fixture. Reply with a size (S/M/L) and…","result":"S — the story is a single-line addition of one `\u003cinput id=\"search\">` inside the existing `\u003cheader>` in /work/fixture/index.html, with a trivially checkable done condition and no logic or dependencies.","child":"a76046789151ff382"},{"ctx":"main","tool":"Skill","name":"implementor","start":1794363502155,"dur":8,"ok":true,"ctxTokens":46381,"args":"Add a search box to the header. Done when index.html has one input with id \"search\". Plan: add one \u003cinput id=\"search\"> inside the existing header in index.html. Size: S.","step":{"new":412,"cached":46349,"out":71,"before":{"new":19764,"cached":251094,"out":838},"after":{"new":20176,"cached":297443,"out":909}}},{"ctx":"main","tool":"Read","start":1794363503664,"dur":7,"ok":true,"ctxTokens":46761,"args":"{\"file_path\":\"/work/fixture/index.html\"}","step":{"new":194,"cached":46759,"out":163,"before":{"new":20176,"cached":297443,"out":909},"after":{"new":20370,"cached":344202,"out":1072}}},{"ctx":"main","tool":"Edit","start":1794363506000,"dur":17,"ok":true,"ctxTokens":46953,"args":"{\"file_path\":\"/work/fixture/index.html\",\"old_string\":\"\u003ch1>Shop\u003c/h1>\\n\u003c/header>\",\"new_string\":\"\u003ch1>Shop\u003c/h1>\\n\u003cinput id=\\\"search\\\" type=\\\"search\\\" placeholder=\\\"Search\\\">\\n\u003c/header>\",\"replace_al…","step":{"new":275,"cached":46921,"out":84,"before":{"new":20370,"cached":344202,"out":1072},"after":{"new":20645,"cached":391123,"out":1156}}},{"ctx":"main","tool":"Bash","name":"false","start":1794363507472,"dur":18,"ok":false,"ctxTokens":47196,"args":"false","result":"Exit code 1","step":{"new":157,"cached":47164,"out":115,"before":{"new":20645,"cached":391123,"out":1156},"after":{"new":20802,"cached":438287,"out":1271}}},{"ctx":"a42f9fc34a9705486","tool":"Skill","name":"checklist","start":1794363510994,"dur":3,"ok":true,"ctxTokens":26936,"step":{"new":254,"cached":26934,"out":150,"before":{"new":6766,"cached":20170,"out":113},"after":{"new":7020,"cached":47104,"out":263}}},{"ctx":"a42f9fc34a9705486","tool":"Bash","name":"cat /work/fixture/stories.md; echo \"---COUNT---\"; grep -c 'id=\"search\"' /…","start":1794363513083,"dur":30,"ok":true,"ctxTokens":27188,"args":"cat /work/fixture/stories.md; echo \"---COUNT---\"; grep -c 'id=\"search\"' /work/fixture/index.html","result":"# Epic: search","step":{"new":254,"cached":27186,"out":206,"before":{"new":7020,"cached":47104,"out":263},"after":{"new":7274,"cached":74290,"out":469}}},{"ctx":"a42f9fc34a9705486","tool":"Bash","name":"grep -n 'id=\"search\"' /work/fixture/index.html; echo \"---HEADER---\"; grep…","start":1794363515875,"dur":27,"ok":true,"ctxTokens":27440,"args":"grep -n 'id=\"search\"' /work/fixture/index.html; echo \"---HEADER---\"; grep -n -i 'header' /work/fixture/index.html","result":"6:\u003cinput id=\"search\" type=\"search\" placeholder=\"Search\">","step":{"new":306,"cached":27408,"out":101,"before":{"new":7274,"cached":74290,"out":469},"after":{"new":7580,"cached":101698,"out":570}}},{"ctx":"main","tool":"Skill","name":"validator","start":1794363509430,"dur":8291,"ok":true,"ctxTokens":47321,"args":"Add a search box to the header. Done when index.html has one input with id \"search\".","result":"PASS — /work/fixture/index.html contains exactly one `\u003cinput id=\"search\">` (grep count = 1), and it sits inside the `\u003cheader>` element (line 6, between `\u003cheader>` on line 4 and `\u003c/header>` on line 7), matching the story's done condition.","child":"a42f9fc34a9705486"},{"ctx":"ab0c6cfa72e7dc42e","tool":"Bash","name":"wc -l /work/fixture/stories.md","start":1794363523063,"dur":32,"ok":true,"ctxTokens":48206,"args":"wc -l /work/fixture/stories.md","result":"3 /work/fixture/stories.md","step":{"new":220,"cached":48202,"out":186,"before":{"new":654,"cached":47552,"out":130},"after":{"new":874,"cached":95754,"out":316}}},{"ctx":"main","tool":"Agent","name":"fork","start":1794363521083,"dur":4499,"ok":true,"ctxTokens":47584,"args":"Fork: first question + wc -l: Answer this question from the conversation context you inherited: \"what was the first thing the user asked in this conversation?\" Then run `wc -l stories.md` in /tmp/tmp…","result":"**First thing the user asked:** to do three things in order: 1) use the orchestrator skill and follow all its steps; 2) in one message, start two subagents in parallel in the foreground, a `fork` subagent answering \"what was the first thing the user asked in this conversation?\" and running `wc -l s…","child":"ab0c6cfa72e7dc42e"},{"ctx":"af7a52b909af34e47","tool":"Bash","name":"wc -c stories.md","start":1794363525603,"dur":39,"ok":true,"ctxTokens":26936,"args":"wc -c stories.md","result":"109 stories.md","step":{"new":232,"cached":26934,"out":156,"before":{"new":6766,"cached":20170,"out":165},"after":{"new":6998,"cached":47104,"out":321}}},{"ctx":"main","tool":"Agent","name":"general-purpose","start":1794363523097,"dur":4731,"ok":true,"ctxTokens":47584,"args":"General: first question + wc -c: Answer this question: \"what was the first thing the user asked in this conversation?\" You start with a fresh context, so if you cannot know the answer, say so plainly…","result":"**Answer to the question:** I cannot know what the user first asked in this conversation. I started with a fresh context and only see the single message that launched me; no earlier turns are visible to me, so I won't guess.","child":"af7a52b909af34e47"},{"ctx":"a1505849fed2cf3cf","tool":"Skill","name":"checklist","start":1794363564461,"dur":5,"ok":true,"ctxTokens":26903,"step":{"new":239,"cached":26901,"out":150,"before":{"new":6733,"cached":20170,"out":98},"after":{"new":6972,"cached":47071,"out":248}}},{"ctx":"a1505849fed2cf3cf","tool":"Bash","name":"cat /work/fixture/stories.md; echo \"---COUNT---\"; grep -c 'id=\"search\"' /…","start":1794363566337,"dur":58,"ok":true,"ctxTokens":27140,"args":"cat /work/fixture/stories.md; echo \"---COUNT---\"; grep -c 'id=\"search\"' /work/fixture/index.html","result":"# Epic: search","step":{"new":254,"cached":27138,"out":72,"before":{"new":6972,"cached":47071,"out":248},"after":{"new":7226,"cached":74209,"out":320}}},{"ctx":"main","tool":"Skill","name":"validator","start":1794363562808,"dur":5229,"ok":true,"ctxTokens":46241,"result":"PASS — `grep -c 'id=\"search\"' index.html` returns exactly 1, matching the story's done condition (one input with id \"search\" in /work/fixture/index.html).","child":"a1505849fed2cf3cf"},{"ctx":"main","tool":"Read","start":1794363569251,"dur":10,"ok":true,"ctxTokens":46457,"args":"{\"file_path\":\"/work/fixture/index.html\"}","step":{"new":215,"cached":46425,"out":46,"before":{"new":33708,"cached":614649,"out":2024},"after":{"new":33923,"cached":661074,"out":2070}}}]};
 const PALETTE = 8;
 const SEQ_GUTTER = 130, SEQ_RIGHT = 120, SEQ_COL = 230, SEQ_HEAD = 54, SEQ_ROW = 40, CHAR_W = 6.6;
 // A context's token counts take three text rows below its call (y to y + 40);
@@ -315,13 +346,16 @@ function drawSequence() {
 const kids = new Map();
 const containerKey = (ctx) => (ctx === 'main' || !D.calls.some((c) => c.child === ctx) ? `root` : ctx);
 const items = D.calls.map((c, i) => ({ type: 'call', i, start: c.start, ctx: c.ctx }))
-  .concat(D.markers.filter((m) => m.kind === 'compact').map((m) => ({ type: 'compact', m, start: m.at, ctx: m.ctx })));
+  .concat(D.markers.filter((m) => m.kind === 'compact').map((m) => ({ type: 'compact', m, start: m.at, ctx: m.ctx })))
+  .concat(D.ledger.map((m) => ({ type: 'step', m, start: m.at, ctx: m.ctx })));
 for (const it of items) {
   const key = containerKey(it.ctx);
   if (!kids.has(key)) kids.set(key, []);
   kids.get(key).push(it);
 }
-for (const list of kids.values()) list.sort((a, b) => a.start - b.start);
+// A prompt comes before the calls its model call made, which start at the same time.
+const rank = (it) => (it.type === 'step' ? (it.m.first ? -1 : 1) : 0);
+for (const list of kids.values()) list.sort((a, b) => a.start - b.start || rank(a) - rank(b));
 
 const ctxName = (id) => (byId.get(id) ? `${byId.get(id).label}${id === 'main' ? '' : ` (${short(id)})`}` : id);
 // An inline skill returns nothing: its text joins the caller's context, and
@@ -333,30 +367,57 @@ const resultText = (c) => (c.result ? c.result
 // The same square-root scale as the text tree: the longest call fills the bar.
 const barWidth = (ms, longest) => (longest && ms ? Math.max(1, Math.round(Math.sqrt(Math.min(ms, longest) / longest) * 66)) : 0);
 
+const COLUMNS = ['new', 'cached', 'out'];
+const blanks = '<span></span><span></span><span></span>';
+let focused;
+
+// A context's totals. A click on them focuses that context.
+const totalCells = (t, ctx, what) => COLUMNS.map((k) => `<span class="num tot" data-focus="${esc(ctx)}" title="${t[k]} ${k}, the total of this ${what}${ctx ? '. Click to dim the other contexts.' : ''}">${count(t[k])}</span>`).join('');
+
+// A step's own cost, with a bar from where the context's previous step ended.
+function stepCells(step, ctx) {
+  if (!step) return blanks;
+  if (step.shared) return COLUMNS.map(() => '<span class="num" title="made together with other calls: the model call after them is on the last one">&darr;</span>').join('');
+  const total = spentOf(ctx) || {};
+  return COLUMNS.map((k) => {
+    const bar = total[k] ? `<i style="left:${(100 * step.before[k] / total[k]).toFixed(2)}%;width:${(100 * step[k] / total[k]).toFixed(2)}%;background:${color(ctx)}"></i>` : '';
+    return `<span class="num wf" title="${step[k]} ${k} at this step. So far in this context: ${step.after[k]}${total[k] ? ` of ${total[k]}` : ''}.">+${count(step[k])}${bar}</span>`;
+  }).join('');
+}
+
 function drawTree() {
   const all = document.getElementById('all').checked;
   const shownCall = (c) => all || c.tool === 'Skill' || c.tool === 'Agent';
   const longest = Math.max(0, ...D.calls.filter(shownCall).map((c) => c.dur));
+  const totalRow = (label, t, ctx) => (t ? `<div class="row mark" data-ctx="${ctx}"><span></span><span></span><span></span>${totalCells(t, ctx, ctx ? 'context' : 'session')}`
+    + `<span class="call">${ctx ? `<i class="chip" style="background:${color(ctx)}"></i>` : ''}<b>${label}</b></span></div>` : '');
   let h = '<div class="thead"><span>time</span><span class="num">duration</span><span></span><span class="num">new</span><span class="num">cached</span><span class="num">out</span><span>call</span></div>';
   const walk = (key, depth) => (kids.get(key) || []).forEach((it) => {
     const pad = depth * 22;
     if (it.type === 'compact') {
-      h += `<div class="row mark"><span>${clock(it.m.at)}</span><span></span><span></span><span></span><span></span><span></span>`
+      h += `<div class="row mark" data-ctx="${esc(it.ctx)}"><span>${clock(it.m.at)}</span><span></span><span></span>${blanks}`
         + `<span class="call" style="padding-left:${pad}px">-- ${esc(short(it.ctx))} compacted (${esc(it.m.trigger || 'unknown trigger')})</span></div>`;
+      return;
+    }
+    if (it.type === 'step') {
+      if (!all) return;
+      h += `<div class="row mark" data-ctx="${esc(it.ctx)}"><span>${Number.isFinite(it.m.at) ? clock(it.m.at) : ''}</span><span></span><span></span>${stepCells(it.m.step, it.ctx)}`
+        + `<span class="call" style="padding-left:${pad}px"><i class="chip small" style="background:${color(it.ctx)}"></i><span>${it.m.back ? '&larr; ' : ''}${esc(it.m.label)}</span></span></div>`;
       return;
     }
     const c = D.calls[it.i];
     const shown = shownCall(c);
     if (shown) {
       const spent = c.child && spentOf(c.child);
-      const hue = color(c.child && byId.has(c.child) ? c.child : c.ctx);
-      h += `<div class="row" id="r${it.i}" data-i="${it.i}"><span class="muted">${clock(c.start)}</span><span class="num">${esc(took(c))}</span>`
+      const own = c.child && byId.has(c.child) ? c.child : c.ctx;
+      const hue = color(own);
+      h += `<div class="row" id="r${it.i}" data-i="${it.i}" data-ctx="${esc(own)}"><span class="muted">${clock(c.start)}</span><span class="num">${esc(took(c))}</span>`
         + `<span class="bar"><i style="width:${barWidth(c.running ? 0 : c.dur, longest)}px;background:${hue}"></i></span>`
-        + (spent ? [spent.new, spent.cached, spent.out].map((n) => `<span class="num" title="${n}">${count(n)}</span>`).join('') : '<span></span><span></span><span></span>')
+        + (spent ? totalCells(spent, c.child, 'context') : stepCells(all && c.step, c.ctx))
         + `<span class="call" style="padding-left:${pad}px"><i class="chip" style="background:${hue}"></i>`
         + `<span><b>${esc(c.name || kindWord(c.tool))}</b>${c.name ? ` (${esc(kindWord(c.tool))})` : ''}</span>`
         + `<span class="words">${esc(words(c))}</span>${c.ok ? '' : '<span class="fail">failed</span>'}<span class="gist">${esc(gist(c))}</span></span></div>`;
-      h += `<div class="detail" id="d${it.i}" hidden style="margin-left:${pad + 20}px;border-color:${color(c.ctx)}">`
+      h += `<div class="detail" id="d${it.i}" data-ctx="${esc(own)}" hidden style="margin-left:${pad + 20}px;border-color:${color(c.ctx)}">`
         + `<b>context</b>${esc(ctxName(c.ctx))}\n`
         + (c.ctxTokens ? `<b>history</b>${esc(tok(c.ctxTokens))} in the context when it made this call\n` : '')
         + (c.args ? `<b>args</b>${esc(c.args)}\n` : '')
@@ -364,8 +425,21 @@ function drawTree() {
     }
     if (c.child) walk(c.child, depth + (shown ? 1 : 0));
   });
+  h += totalRow('main context', D.totals.main, 'main');
   walk('root', 0);
-  document.getElementById('tree').innerHTML = h;
+  h += totalRow('session', D.totals.session, '');
+  const tree = document.getElementById('tree');
+  tree.innerHTML = h;
+  tree.classList.toggle('all', all);
+  focus(focused);
+}
+
+// Keeps the rows of one context and dims the rest; no context brings them all back.
+function focus(ctx) {
+  focused = ctx || undefined;
+  const tree = document.getElementById('tree');
+  tree.classList.toggle('focus', Boolean(focused));
+  tree.querySelectorAll('[data-ctx]').forEach((el) => el.classList.toggle('dim', Boolean(focused) && el.dataset.ctx !== focused));
 }
 
 function select(i, fromTimeline) {
@@ -377,7 +451,13 @@ function select(i, fromTimeline) {
   if (fromTimeline) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
-document.getElementById('tree').addEventListener('click', (e) => { const r = e.target.closest('.row'); if (r) select(r.dataset.i, false); });
+document.getElementById('tree').addEventListener('click', (e) => {
+  const total = e.target.closest('[data-focus]');
+  if (total) { if (total.dataset.focus) focus(total.dataset.focus === focused ? undefined : total.dataset.focus); return; }
+  const r = e.target.closest('.row');
+  if (r && r.dataset.i !== undefined) select(r.dataset.i, false);
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') focus(undefined); });
 document.getElementById('tl').addEventListener('click', (e) => {
   const b = e.target.closest('.hit');
   if (b && b.dataset.group) { expanded.add(Number(b.dataset.group)); drawSequence(); } else if (b) select(b.dataset.i, true);

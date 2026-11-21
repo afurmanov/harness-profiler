@@ -100,17 +100,21 @@ npx -y github:afurmanov/harness-profiler tree --format html > trace.html
 The text tree of the example, one line per skill or subagent call:
 
 ```
-time     duration             new  cached    out  call
-03:01:02     8 ms ▏                               orchestrator (skill) inline
-03:01:13     85 s ████████   8.3k  183.3k   1.1k  process-story (agent) new context a5bb2b (Process the search box story: Add…) -> Both verdicts are PASS.
-03:01:23     4 ms                                   planner (skill) inline (Add a search box to the header. Done when index.html has one input with id "search".)
-03:01:28     5 ms                                   implementor (skill) inline (Add a search box to the header. Done when index.html has one input with id "sea…)
-03:01:41     11 s ██▉        7.1k   47.2k    207    validator (skill) new context a860b0 (Story: Add a search box to the hea…) -> PASS — `grep -c 'id="search"…
-03:01:58     34 s █████      7.9k  102.2k    765    github (skill) new context ab7e86 (Story: Add a search box to the head…) -> Done. Validator verdict: **PAS…
-03:02:15    9.6 s ██▋        7.3k   47.3k    220      validator (skill) new context a35f3d (Story: Add a search box to the he…) -> PASS — pr.md describes the …
+time     duration              new   cached     out  call
+                              9.1k   169.6k     486  main context
+03:01:02     8 ms ▏                                  orchestrator (skill) inline
+03:01:13     85 s ████████    8.3k   183.3k    1.1k  process-story (agent) new context a5bb2b (Process the sear…
+03:01:23     4 ms                                      planner (skill) inline (Add a search box to the header. …
+03:01:28     5 ms                                      implementor (skill) inline (Add a search box to the head…
+03:01:41     11 s ██▉         7.1k    47.2k     207    validator (skill) new context a860b0 (Story: Add a searc…
+03:01:58     34 s █████       7.9k   102.2k     765    github (skill) new context ab7e86 (Story: Add a search b…
+03:02:15    9.6 s ██▋         7.3k    47.3k     220      validator (skill) new context a35f3d (Story: Add a sea…
+                             39.7k   549.6k    2.8k  session
 ```
 
-Each line starts with fixed columns: start time (UTC), duration with a bar, and the tokens the new context spent (`new`, `cached`, `out`). The bar uses a square-root scale, so the longest call fills it and short ones still show. Then come the name and kind, where the call ran (`inline` or `new context <id>`), its arguments, and the first line of its result. `--verbose` adds every other tool call under the context that made it.
+Each line starts with fixed columns: start time (UTC), duration with a bar, and the tokens the new context spent (`new`, `cached`, `out`). The bar uses a square-root scale, so the longest call fills it and short ones still show. Then come the name and kind, where the call ran (`inline` or `new context <id>`), its arguments, and the first line of its result. The first line is the main context and the last is the session, each with its totals.
+
+`--verbose` adds every other tool call under the context that made it, and breaks each context's totals into steps. Every model call follows one thing, a prompt or the results of the calls made just before it, and its tokens go on that row with a `+`: `new` for what it read that the cache did not hold yet, `cached` for the history it read again, `out` for what it wrote next. A context's steps add up to its totals. `prompt` is a context's first model call, so it shows what starting that context cost. A call that starts a context keeps that context's totals on its own row, and what it cost its caller is on the `<- name returned` row after it. Calls made together share the model call after them: it is on the last one, and the others show `↓`. After a long pause the cache has expired, and the next step's `new` is the whole history.
 
 ## How it works
 

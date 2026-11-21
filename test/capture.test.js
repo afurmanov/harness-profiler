@@ -244,7 +244,23 @@ test('a background subagent ends at its SubagentStop, and its call names the cop
     [undefined, 'root', 0], ['fork', 'copy', 0], ['general-purpose', 'fresh', 1],
   ]);
   assert.deepEqual(callColumn(renderTree(records)), [
-    'fork (agent) new context a0c311, copy of main, background (Count lines in notes.txt…) -> Output of `wc -l no…',
-    'general-purpose (agent) new context a47c81, background (Count bytes in notes.txt: …) -> The exact output of …',
+    'fork (agent) new context a0c311, copy of main, background (Count lines in notes.tx…) -> Output of `wc -l …',
+    'general-purpose (agent) new context a47c81, background (Count bytes in notes.txt…) -> The exact output of…',
   ]);
+});
+
+test('a fork does not count the copy of the model call that launched it', () => {
+  const dir = tempDir();
+  const transcript = path.join(dir, 's.jsonl');
+  const turn = (id, cached) => JSON.stringify({ type: 'assistant', message: { id, usage: { input_tokens: 1, cache_read_input_tokens: cached, output_tokens: 5 }, content: [] } });
+  fs.mkdirSync(path.join(dir, 's', 'subagents'), { recursive: true });
+  fs.writeFileSync(transcript, [turn('mA', 1000), turn('mB', 2000)].join('\n') + '\n');
+  fs.writeFileSync(path.join(dir, 's', 'subagents', 'agent-f1.jsonl'), [turn('mA', 1000), turn('mC', 1100)].join('\n') + '\n');
+  const records = [
+    { event: 'SessionStart', transcript },
+    { tool: 'Agent', name: 'fork', tool_use_id: 't1', child_agent_id: 'f1', child_agent_type: 'fork', at: '2026-11-09T16:21:10.000Z', duration_ms: 1000 },
+  ];
+  const spend = contextSpend(records);
+  assert.deepEqual(spend.get('f1'), { new: 1, cached: 1100, out: 5, calls: 1 });
+  assert.deepEqual(spend.get('main'), { new: 2, cached: 3000, out: 10, calls: 2 });
 });
