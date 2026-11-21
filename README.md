@@ -114,7 +114,17 @@ time     duration              new   cached     out  call
 
 Each line starts with fixed columns: start time (UTC), duration with a bar, and the tokens the new context spent (`new`, `cached`, `out`). The bar uses a square-root scale, so the longest call fills it and short ones still show. Then come the name and kind, where the call ran (`inline` or `new context <id>`), its arguments, and the first line of its result. The first line is the main context and the last is the session, each with its totals.
 
-`--verbose` adds every other tool call under the context that made it, and breaks each context's totals into steps. Every model call follows one thing, a prompt or the results of the calls made just before it, and its tokens go on that row with a `+`: `new` for what it read that the cache did not hold yet, `cached` for the history it read again, `out` for what it wrote next. A context's steps add up to its totals. `prompt` is a context's first model call, so it shows what starting that context cost. A call that starts a context keeps that context's totals on its own row, and what it cost its caller is on the `<- name returned` row after it. Calls made together share the model call after them: it is on the last one, and the others show `↓`. After a long pause the cache has expired, and the next step's `new` is the whole history.
+`--verbose`, or **every tool call** on the page, adds every other tool call and breaks each context's totals into steps:
+
+![The call tree of the example with every tool call: under each context's bold totals, a prompt row, one row per call and a return row, each with its own new, cached and out tokens and a bar that fills from 0 to the context's total](e2e/toy/output/steps.png)
+
+- A bold row is a context with its totals. The rows inside it are its steps, marked `+`, and they add up to those totals.
+- A step shows the model call that came right after it: `new` is what the cache did not hold yet, `cached` is the history read again, `out` is what the model wrote next.
+- `prompt` is what starting the context cost. `← name returned` is what a subagent or forked skill cost its caller.
+- `↓` marks calls made together: the model call after them is on the last one.
+- After a long pause the cache has expired, and the next step's `new` is the whole history.
+
+The text tree prints `<-` for `←`.
 
 ## How it works
 
