@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 'use strict';
 // Renders e2e/<harness>/output/trace.jsonl into tree.txt, tree-verbose.txt
-// and trace.html beside it. With --png it also screenshots the page twice
-// (calls only, and every tool call except for the toy) so GitHub can show it; that needs
-// Playwright, a dev-only dependency.
+// and trace.html beside it. With --png it also screenshots the page so GitHub
+// can show it: trace.png, then with every tool call shown, the call tree of the
+// toy (steps.png) and the whole page of the others (trace-all-calls.png). That needs Playwright, a dev-only dependency.
 const fs = require('fs');
 const path = require('path');
 const { renderTree, renderHtml } = require('../plugin/libexec/hp.js');
@@ -34,9 +34,11 @@ async function screenshot(dir, allCalls) {
     const overflow = await page.evaluate(() => { const p = document.querySelector('.panel'); return p.scrollWidth - p.clientWidth; });
     if (overflow > 0) await page.setViewportSize({ width: 1280 + overflow + 8, height: 800 });
     await page.screenshot({ path: path.join(dir, 'trace.png'), fullPage: true });
-    if (!allCalls) return;
     await page.check('#all');
-    await page.screenshot({ path: path.join(dir, 'trace-all-calls.png'), fullPage: true });
+    // The pointer rests on the checkbox's row otherwise, and that row shows as hovered.
+    await page.mouse.move(0, 0);
+    if (allCalls) await page.screenshot({ path: path.join(dir, 'trace-all-calls.png'), fullPage: true });
+    else await page.locator('#tree').screenshot({ path: path.join(dir, 'steps.png') });
   } finally {
     await browser.close();
   }
