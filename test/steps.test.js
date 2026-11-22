@@ -51,7 +51,8 @@ test('verbose: each row carries the model call that came right after it', () => 
     '+300 +1.0k +40 prompt',
     '+277 +1.3k +194 planner (skill) inline -> ok',
     '+389 +1.6k +69 index.html (Read)',
-    '966 3.9k 303 session',
+    '------- -------- -------',
+    '966 3.9k 303 session total',
   ]);
 });
 
@@ -71,12 +72,13 @@ test('verbose: a context keeps its totals, and what it cost its caller is on the
     '+700 +900 +10 prompt',
     '+50 +1.6k +60 wc -l (Bash)',
     '+120 +1.5k +20 <- counter returned',
-    '1.4k 5.0k 120 session',
+    '------- -------- -------',
+    '1.4k 5.0k 120 session total',
   ]);
 });
 
 test('the plain tree has the totals and no steps', () => {
-  assert.deepEqual(callColumn(renderTree(withSubagent())), ['main context', 'counter (agent) new context a1 -> ok', 'session']);
+  assert.deepEqual(callColumn(renderTree(withSubagent())), ['main context', 'counter (agent) new context a1 -> ok', '', 'session total']);
 });
 
 test('html carries each step, the prompt and return rows, and the totals', () => {

@@ -12,4 +12,5 @@ time     duration              new   cached     out  call
 02:18:54                                             -- main compacted (manual)
 02:19:22    5.2 s ██████▍     7.2k    74.2k     320  validator (skill) new context a15058 -> PASS — `grep -c 'id="search"' index.html` returns exactly 1, matc…
 02:19:24     5 ms ▎                                    checklist (skill) inline
-                             70.6k     1.1M    4.3k  session
+                           ------- -------- -------
+                             70.6k     1.1M    4.3k  session total

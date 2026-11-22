@@ -22,7 +22,10 @@ const COPY_AGENT_TYPE = 'fork';
 const MAIN = 'main';
 const VIEW_TEMPLATE = 'view.html';
 const SHOW_SKILL = path.join('skills', 'show-profile');
+const BRANCH_TEMPLATE = 'branch.html';
 const DATA_SLOT = '/*DATA*/null';
+const TEMPLATE_SLOT = '/*TEMPLATE*/null';
+const SLOTS = /\/\*(DATA|TEMPLATE)\*\/null/g;
 const DUPLICATE_EVENT_MS = 5000;
 const TRANSCRIPT_TAIL_BYTES = 512 * 1024;
 const ANSI_COLORS = [36, 33, 35, 32, 34, 31];
@@ -53,7 +56,7 @@ const HOOK_COMMAND = hookCommand(LAUNCHER);
 const OLD_HOOK_COMMAND = hookCommand(OLD_LAUNCHER);
 const HOOK_TIMEOUT_S = 5;
 const HOOK_DIR = path.join('.claude', 'harness-profiler');
-const HOOK_FILES = [LAUNCHER, 'hp.js', VIEW_TEMPLATE];
+const HOOK_FILES = [LAUNCHER, 'hp.js', VIEW_TEMPLATE, BRANCH_TEMPLATE];
 
 // ---------- text helpers ----------
 
@@ -394,14 +397,51 @@ function ledgerOf(records) {
 // spend comes from ownRequests, which counts each message id once, so a fork's
 // copy of its parent's request is not summed twice.
 function sessionTotals(spend) {
-  if (!spend.size) return undefined;
+  return spend.size ? sumSpend([...spend.values()]) : undefined;
+}
+
+function sumSpend(spends) {
   const total = { new: 0, cached: 0, out: 0 };
-  for (const s of spend.values()) {
+  for (const s of spends) {
     total.new += s.new;
     total.cached += s.cached;
     total.out += s.out;
   }
   return total;
+}
+
+function spanOf(records) {
+  const starts = records.map(startOf).filter(Number.isFinite);
+  const ends = records.map((r) => Date.parse(r.at)).filter(Number.isFinite);
+  return { first: Math.min(...starts), last: Math.max(...ends) };
+}
+
+// One row of the branch page. totals is undefined when no transcript was read.
+function sessionSummary(session) {
+  const { first, last } = spanOf(session.records);
+  return {
+    id: session.id,
+    start: first,
+    duration: last - first,
+    calls: uniqueCalls(session.records).length,
+    contexts: contextsOf(session.records).contexts.length,
+    totals: sessionTotals(contextSpend(session.records)),
+  };
+}
+
+// cachedShare is a share of tokens: 20 new, 70 cached, 10 out => 0.7.
+function branchSummary(summaries) {
+  const counted = summaries.map((s) => s.totals).filter(Boolean);
+  const totals = counted.length ? sumSpend(counted) : undefined;
+  const all = totals ? totals.new + totals.cached + totals.out : 0;
+  const starts = summaries.map((s) => s.start);
+  return {
+    sessions: summaries.length,
+    first: Math.min(...starts),
+    last: Math.max(...starts),
+    totals,
+    cachedShare: all ? totals.cached / all : undefined,
+  };
 }
 
 function spentByChild(payload, childId) {
@@ -811,6 +851,14 @@ function totalLine(label, spend) {
   return columns(['', '', '', formatCount(spend.new), formatCount(spend.cached), formatCount(spend.out)]) + label;
 }
 
+// A rule under the token columns, then their sum:
+//   -------  --------  -------
+//     39.7k    549.6k     2.8k  session total
+function sumLines(label, spend) {
+  const rule = COLUMNS.map(([name, width]) => (['new', 'cached', 'out'].includes(name) ? '-'.repeat(width) : ''));
+  return [columns(rule).trimEnd(), totalLine(label, spend)];
+}
+
 function treeHeader() {
   return columns(COLUMNS.map(([name]) => name)) + 'call';
 }
@@ -882,18 +930,16 @@ function renderTree(records, { verbose = false, color = false } = {}) {
     treeHeader(),
     ...(main ? [totalLine('main context', main)] : []),
     ...shown.map(([node, depth]) => formatLine(node, depth, options)),
-    ...(totals ? [totalLine('session', totals)] : []),
+    ...(totals ? sumLines('session total', totals) : []),
   ].join('\n');
 }
 
-// One self-contained page: the template from libexec/ with the trace inlined.
-// `<` is escaped so tool output in the JSON can't close the script tag.
-function renderHtml(session) {
+function sessionData(session) {
   const calls = uniqueCalls(fillContextTokens(session.records));
   const { contexts, markers } = contextsOf(session.records);
   const spend = contextSpend(session.records);
   const ledger = ledgerOf(session.records);
-  const data = {
+  return {
     session: session.id,
     branch: (calls.find((r) => r.branch) || {}).branch,
     contexts: contexts.map((c) => ({ ...c, spent: spend.get(c.id) })),
@@ -908,9 +954,33 @@ function renderHtml(session) {
       };
     }),
   };
-  const json = JSON.stringify(data).replace(/</g, '\\u003c');
-  const template = fs.readFileSync(path.join(__dirname, VIEW_TEMPLATE), 'utf8');
-  return template.replace(DATA_SLOT, () => json);
+}
+
+// `<` is escaped so tool output in the JSON can't close the script tag.
+function inlineJson(value) {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+function template(name) {
+  return fs.readFileSync(path.join(__dirname, name), 'utf8');
+}
+
+// One self-contained page: the template from libexec/ with the trace inlined.
+function renderHtml(session) {
+  return template(VIEW_TEMPLATE).replace(DATA_SLOT, () => inlineJson(sessionData(session)));
+}
+
+// The branch page carries the session template once, as a string, and each
+// session's data. It builds a session's page in the browser when its row opens.
+// Both slots are filled in one pass, so slot text inside a trace or inside the
+// session template is never filled itself.
+function renderBranchHtml(sessions, branch) {
+  const summaries = sessions.map(sessionSummary);
+  const fill = {
+    [DATA_SLOT]: { branch, summary: branchSummary(summaries), sessions: sessions.map((s, i) => ({ ...summaries[i], data: sessionData(s) })) },
+    [TEMPLATE_SLOT]: template(VIEW_TEMPLATE),
+  };
+  return template(BRANCH_TEMPLATE).replace(SLOTS, (slot) => inlineJson(fill[slot]));
 }
 
 function listSessions(dir) {
@@ -920,8 +990,7 @@ function listSessions(dir) {
     .filter((f) => f.endsWith('.jsonl'))
     .map((f) => {
       const records = readTrace(path.join(traces, f));
-      const starts = records.map(startOf).filter(Number.isFinite);
-      return { id: f.replace(/\.jsonl$/, ''), records, first: Math.min(...starts), last: Math.max(...records.map((r) => Date.parse(r.at)).filter(Number.isFinite)) };
+      return { id: f.replace(/\.jsonl$/, ''), records, ...spanOf(records) };
     })
     .filter((s) => s.records.length);
 }
@@ -941,8 +1010,40 @@ function parseTreeArgs(argv) {
   return options;
 }
 
-function stamp(session) {
-  return `${new Date(session.first).toISOString().slice(0, 19).replace('T', ' ')} UTC`;
+function stamp(ms) {
+  return `${new Date(ms).toISOString().slice(0, 19).replace('T', ' ')} UTC`;
+}
+
+function percent(share) {
+  return `${Math.round(share * 100)}%`;
+}
+
+// Every session of a branch, oldest first, then the branch total:
+//   1.2M    8.4M   31.0k  branch total, feature/x: 2 sessions, 87% of tokens cached
+function renderBranchTree(sessions, branch, options) {
+  const summaries = sessions.map(sessionSummary);
+  const { totals, cachedShare } = branchSummary(summaries);
+  const label = `branch total, ${branch}: ${plural(sessions.length, 'session')}`;
+  return [
+    ...sessions.map((s, i) => `# session ${s.id} (${sessionWords(summaries[i])})\n${renderTree(s.records, options)}\n`),
+    ...(totals ? sumLines(`${label}, ${percent(cachedShare)} of tokens cached`, totals) : [columns([]) + label]),
+  ].join('\n');
+}
+
+function sessionWords(summary) {
+  return [stamp(summary.start), formatSpan(summary.duration), plural(summary.calls, 'call'), plural(summary.contexts, 'context')].join(', ');
+}
+
+//   42000 => 42 s    750000 => 13 min    7500000 => 2 h 05 min
+function formatSpan(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s} s`;
+  const m = Math.round(s / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
 function tree(argv, dir, { color = false } = {}) {
@@ -950,27 +1051,20 @@ function tree(argv, dir, { color = false } = {}) {
   const sessions = listSessions(dir);
   if (!sessions.length) throw new UsageError(`No traces in ${path.join(dir, TRACE_DIR)}. Run a session with the hook installed first.`);
 
-  let chosen;
   if (branch) {
-    chosen = sessions.filter((s) => s.records.some((r) => r.branch === branch)).sort((a, b) => a.first - b.first);
+    const chosen = sessions.filter((s) => s.records.some((r) => r.branch === branch)).sort((a, b) => a.first - b.first);
     if (!chosen.length) throw new UsageError(`No session recorded on branch ${branch}.`);
-  } else if (prefix) {
-    chosen = sessions.filter((s) => s.id.startsWith(prefix));
-    if (chosen.length !== 1) throw new UsageError(chosen.length ? `Session prefix ${prefix} is ambiguous.` : `No session starts with ${prefix}.`);
+    return format === 'html' ? renderBranchHtml(chosen, branch) : renderBranchTree(chosen, branch, { verbose, color });
+  }
+  let session;
+  if (prefix) {
+    const matches = sessions.filter((s) => s.id.startsWith(prefix));
+    if (matches.length !== 1) throw new UsageError(matches.length ? `Session prefix ${prefix} is ambiguous.` : `No session starts with ${prefix}.`);
+    [session] = matches;
   } else {
-    chosen = [sessions.reduce((a, b) => (b.last > a.last ? b : a))];
+    session = sessions.reduce((a, b) => (b.last > a.last ? b : a));
   }
-  if (format === 'html') {
-    if (chosen.length > 1) {
-      const list = chosen.map((s) => `  ${s.id.slice(0, SESSION_WIDTH)}  ${stamp(s)}`).join('\n');
-      throw new UsageError(`The html page shows one session. Pick one by id prefix:\n${list}`);
-    }
-    return renderHtml(chosen[0]);
-  }
-  if (!branch) return renderTree(chosen[0].records, { verbose, color });
-  return chosen
-    .map((s) => `# session ${s.id} (${stamp(s)})\n${renderTree(s.records, { verbose, color })}`)
-    .join('\n\n');
+  return format === 'html' ? renderHtml(session) : renderTree(session.records, { verbose, color });
 }
 
 // ---------- init ----------
@@ -1112,4 +1206,4 @@ function main(argv) {
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2));
 
-module.exports = { fillContextTokens, contextSpend, spentTokens, buildRecord, buildEventRecord, capture, serialize, contextsOf, renderTree, renderHtml, buildForest, tree, mergeHooks, init, doctor, mask, HOOK_COMMAND, OLD_HOOK_COMMAND };
+module.exports = { fillContextTokens, contextSpend, sessionSummary, branchSummary, spentTokens, buildRecord, buildEventRecord, capture, serialize, contextsOf, renderTree, renderHtml, renderBranchTree, renderBranchHtml, buildForest, tree, mergeHooks, init, doctor, mask, HOOK_COMMAND, OLD_HOOK_COMMAND };
