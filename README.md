@@ -97,28 +97,6 @@ npx -y github:afurmanov/harness-profiler tree --format html > trace.html
 
 `tree` also takes a session id prefix (`tree 11cf`) and `--verbose` for every tool call, untrimmed. In a repository with the committed hook, `sh .claude/harness-profiler/hp.sh tree` does the same with no network.
 
-### A whole branch
-
-To see what a feature cost, ask for its branch:
-
-```
-npx -y github:afurmanov/harness-profiler tree --branch my-feature --format html > branch.html
-```
-
-![The branch page: the branch totals, one row per session, the first session opened to its diagram and call tree](e2e/branch/output/branch.png)
-
-The page lists every session recorded on the branch, oldest first, with the branch totals above them. Click a session to open its diagram and call tree in place. Without `--format html`, `tree --branch` prints the sessions one after another, each under a line with its start, duration, calls and contexts, and ends with the branch total:
-
-```
-# session 10b7ecea-8de9-405b-b845-9c3666503c6b (2026-11-11 02:17:59 UTC, 2 min, 22 calls, 7 contexts)
-...
-------- -------- -------
- 110.3k     1.6M    7.1k  branch total, main: 2 sessions, 93% of tokens cached
-```
-
-- The cached share is a share of tokens, not of money: a cached token costs a few percent of a new one.
-- A session that switches branches is listed under each of them in full, so its tokens count toward both branch totals.
-
 The text tree of the example, one line per skill or subagent call:
 
 ```
@@ -148,6 +126,26 @@ Each line starts with fixed columns: start time (UTC), duration with a bar, and 
 - After a long pause the cache has expired, and the next step's `new` is the whole history.
 
 The text tree prints `<-` for `←`.
+
+### A whole branch
+
+To see what a feature cost, ask for its branch:
+
+```
+npx -y github:afurmanov/harness-profiler tree --branch my-feature --format html > branch.html
+```
+
+The page lists every session recorded on the branch, oldest first, with the branch totals above them. Click a session to open its diagram and call tree in place. Without `--format html`, `tree --branch` prints the sessions one after another, each under a line with its start, duration, calls and contexts, and ends with the branch total:
+
+```
+# session 10b7ecea-8de9-405b-b845-9c3666503c6b (2026-11-11 02:17:59 UTC, 2 min, 22 calls, 7 contexts)
+...
+------- -------- -------
+ 110.3k     1.6M    7.1k  branch total, main: 2 sessions, 93% of tokens cached
+```
+
+- The cached share is a share of tokens, not of money: a cached token costs a few percent of a new one.
+- A session that switches branches is listed under each of them in full, so its tokens count toward both branch totals.
 
 ## How it works
 
