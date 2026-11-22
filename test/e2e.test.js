@@ -7,7 +7,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { contextsOf } = require('../plugin/libexec/hp.js');
-const { outputs } = require('../e2e/render.js');
+const { outputs, branchOutputs } = require('../e2e/render.js');
 
 const OUTPUT = path.join(__dirname, '..', 'e2e', 'claude', 'output');
 const records = fs.readFileSync(path.join(OUTPUT, 'trace.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
@@ -52,5 +52,14 @@ test('e2e toy: the README example has its skills, one subagent and matching outp
   assert.deepStrictEqual(toy.filter((r) => r.tool === 'Agent').map((r) => r.name), ['process-story']);
   for (const [name, text] of Object.entries(outputs(dir))) {
     assert.strictEqual(fs.readFileSync(path.join(dir, name), 'utf8'), text, `${name} is stale: run node e2e/render.js --png`);
+  }
+});
+
+test('e2e branch: the two sessions as one branch, oldest first, with matching outputs', () => {
+  const root = path.join(__dirname, '..', 'e2e');
+  const rendered = branchOutputs(root);
+  assert.match(rendered['tree.txt'], /^# session 10b7ecea[\s\S]*\n# session 64b45cee[\s\S]*\n +\S+ +\S+ +\S+ {2}branch total, main: 2 sessions, \d+% of tokens cached\n$/);
+  for (const [name, text] of Object.entries(rendered)) {
+    assert.strictEqual(fs.readFileSync(path.join(root, 'branch', 'output', name), 'utf8'), text, `${name} is stale: run node e2e/render.js --png`);
   }
 });

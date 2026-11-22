@@ -24,4 +24,5 @@ time     duration              new   cached     out  call
 03:02:25                      +344   +27.6k    +215      <- validator returned
 03:02:32                      +490   +27.8k    +205    <- github returned
 03:02:38                      +723   +44.6k    +147  <- process-story returned
-                             39.7k   549.6k    2.8k  session
+                           ------- -------- -------
+                             39.7k   549.6k    2.8k  session total

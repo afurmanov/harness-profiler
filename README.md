@@ -95,7 +95,29 @@ The same session as the diagram above, one self-contained page:
 npx -y github:afurmanov/harness-profiler tree --format html > trace.html
 ```
 
-`tree` also takes a session id prefix (`tree 11cf`), `--branch <name>` for every session recorded on that branch, and `--verbose` for every tool call, untrimmed. In a repository with the committed hook, `sh .claude/harness-profiler/hp.sh tree` does the same with no network.
+`tree` also takes a session id prefix (`tree 11cf`) and `--verbose` for every tool call, untrimmed. In a repository with the committed hook, `sh .claude/harness-profiler/hp.sh tree` does the same with no network.
+
+### A whole branch
+
+To see what a feature cost, ask for its branch:
+
+```
+npx -y github:afurmanov/harness-profiler tree --branch my-feature --format html > branch.html
+```
+
+![The branch page: the branch totals, one row per session, the first session opened to its diagram and call tree](e2e/branch/output/branch.png)
+
+The page lists every session recorded on the branch, oldest first, with the branch totals above them. Click a session to open its diagram and call tree in place. Without `--format html`, `tree --branch` prints the sessions one after another, each under a line with its start, duration, calls and contexts, and ends with the branch total:
+
+```
+# session 10b7ecea-8de9-405b-b845-9c3666503c6b (2026-11-11 02:17:59 UTC, 2 min, 22 calls, 7 contexts)
+...
+------- -------- -------
+ 110.3k     1.6M    7.1k  branch total, main: 2 sessions, 93% of tokens cached
+```
+
+- The cached share is a share of tokens, not of money: a cached token costs a few percent of a new one.
+- A session that switches branches is listed under each of them in full, so its tokens count toward both branch totals.
 
 The text tree of the example, one line per skill or subagent call:
 
@@ -109,10 +131,11 @@ time     duration              new   cached     out  call
 03:01:41     11 s ██▉         7.1k    47.2k     207    validator (skill) new context a860b0 (Story: Add a searc…
 03:01:58     34 s █████       7.9k   102.2k     765    github (skill) new context ab7e86 (Story: Add a search b…
 03:02:15    9.6 s ██▋         7.3k    47.3k     220      validator (skill) new context a35f3d (Story: Add a sea…
-                             39.7k   549.6k    2.8k  session
+                           ------- -------- -------
+                             39.7k   549.6k    2.8k  session total
 ```
 
-Each line starts with fixed columns: start time (UTC), duration with a bar, and the tokens the new context spent (`new`, `cached`, `out`). The bar uses a square-root scale, so the longest call fills it and short ones still show. Then come the name and kind, where the call ran (`inline` or `new context <id>`), its arguments, and the first line of its result. The first line is the main context and the last is the session, each with its totals.
+Each line starts with fixed columns: start time (UTC), duration with a bar, and the tokens the new context spent (`new`, `cached`, `out`). The bar uses a square-root scale, so the longest call fills it and short ones still show. Then come the name and kind, where the call ran (`inline` or `new context <id>`), its arguments, and the first line of its result. The first line is the main context with its totals. The last line, under the rule, is the total of the session: the main context plus every context it started.
 
 `--verbose`, or **every tool call** on the page, adds every other tool call and breaks each context's totals into steps:
 
@@ -136,7 +159,7 @@ The plugin registers hooks that run after every tool call, when a subagent stops
 
 `tree` reads these lines and builds the contexts: which call started which subagent, and which subagent made each call. The first write adds `.harness-profile/` to `.git/info/exclude`, so traces stay out of commits. Nothing leaves your machine unless you run `/show-profile` in a cloud session.
 
-The whole tool is one dependency-free file, [plugin/libexec/hp.js](plugin/libexec/hp.js), started by a small shell launcher, [plugin/libexec/hp.sh](plugin/libexec/hp.sh), plus the page template [plugin/libexec/view.html](plugin/libexec/view.html). The [plugin/](plugin) folder is all that Claude Code installs. The rest of the repository is tests, the recorded example, and notes. The hook runs in the background (`async`), so tool calls don't wait for it, and it exits 0 whatever happens, so a broken trace doesn't break your session.
+The whole tool is one dependency-free file, [plugin/libexec/hp.js](plugin/libexec/hp.js), started by a small shell launcher, [plugin/libexec/hp.sh](plugin/libexec/hp.sh), plus two page templates, [view.html](plugin/libexec/view.html) for a session and [branch.html](plugin/libexec/branch.html) for a branch. The [plugin/](plugin) folder is all that Claude Code installs. The rest of the repository is tests, the recorded example, and notes. The hook runs in the background (`async`), so tool calls don't wait for it, and it exits 0 whatever happens, so a broken trace doesn't break your session.
 
 ### Claude Code (web or CLI)
 

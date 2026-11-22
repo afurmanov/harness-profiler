@@ -38,4 +38,5 @@ time     duration              new   cached     out  call
 02:19:26    58 ms ▋           +254   +27.1k     +72    cat /work/fixture/stories.md; echo "---COUNT---"; grep -c 'id="search"' /… (Bash) (cat /work/fixture/stories.md; echo "---COUNT---"; grep -c 'id="search"' /work/fixture/index.html)
 02:19:28                      +218   +46.2k     +71  <- validator returned
 02:19:29    10 ms ▎           +215   +46.4k     +46  Read ({"file_path":"/work/fixture/index.html"})
-                             70.6k     1.1M    4.3k  session
+                           ------- -------- -------
+                             70.6k     1.1M    4.3k  session total

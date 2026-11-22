@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness trace of a branch</title>
+<!-- Written by harness-profiler (`hp tree --branch <name> --format html`). Self-contained: no network, works from file://. -->
+<style>
+:root { --bg:#f7f7f5; --fg:#1d2329; --muted:#66707a; --line:#dcdfe2; --panel:#fff;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --sans: system-ui, -apple-system, "Segoe UI", sans-serif; }
+@media (prefers-color-scheme: dark) { :root { --bg:#14181c; --fg:#e2e6ea; --muted:#9aa4ad; --line:#2b3238; --panel:#1b2025; color-scheme: dark; } }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 var(--sans); padding:24px max(16px, 3vw); }
+h1 { font-size:18px; margin:0 0 2px; overflow-wrap:anywhere; }
+.sub { color:var(--muted); font:12px var(--mono); margin-bottom:10px; }
+.share { max-width:760px; margin:0 0 14px; } .share span { color:var(--muted); }
+.intro { max-width:760px; margin:0 0 14px; }
+.intro summary { cursor:pointer; color:var(--muted); font-size:12px; }
+.intro p { margin:6px 0 0; } .intro ul { margin:6px 0 0; padding-left:20px; } .intro li { margin:2px 0; }
+.list { font:13px/1.45 var(--mono); }
+.row { display:grid; grid-template-columns:10px 16ch 8ch 11ch 5ch 8ch 8ch 8ch 8ch; column-gap:10px; align-items:baseline; padding:3px 6px; border-radius:4px; }
+/* The header's cells are smaller, not the header: its columns are measured in the rows' characters. */
+.thead { color:var(--muted); border-bottom:1px solid var(--line); border-radius:0; margin-bottom:2px; } .thead > * { font-size:12px; }
+.num { text-align:right; font-variant-numeric:tabular-nums; }
+.total { font-weight:600; border-bottom:1px solid var(--line); border-radius:0; margin-bottom:2px; }
+.total .what { grid-column:2 / span 5; }
+.session > summary { cursor:pointer; list-style:none; } .session > summary::-webkit-details-marker { display:none; }
+.session > summary:hover, .session[open] > summary { background:color-mix(in srgb, var(--fg) 7%, transparent); }
+.session .mark { color:var(--muted); font-size:11px; transition:transform .1s; display:inline-block; } .session[open] .mark { transform:rotate(90deg); }
+.session .quiet { color:var(--muted); }
+/* A branch with no token data has nothing to put in the last three columns. */
+.list.bare .tok, .list.bare .total { display:none; }
+.frame { display:block; width:100%; height:420px; margin:4px 0 12px; border:1px solid var(--line); border-radius:8px; box-sizing:border-box; background:var(--bg); }
+/* Used when the browser does not let this page measure the frame: the session scrolls inside it. */
+.frame.fixed { height:80vh; }
+/* Narrow screens keep when, which session, and the tokens. */
+@media (max-width: 640px) {
+  .list { font-size:12px; }
+  .row { grid-template-columns:10px 11ch 8ch 7ch 7ch 7ch; column-gap:8px; }
+  .row .wide, .row .yr { display:none; }
+  .total .what { grid-column:2 / span 2; }
+  /* The open session gets the whole width of the screen, as it has on its own page. */
+  .frame { width:calc(100% + 32px); margin-left:-16px; border-left:0; border-right:0; border-radius:0; }
+}
+</style></head><body>
+<h1>Branch <span id="name"></span></h1>
+<div class="sub" id="subline"></div>
+<p class="share" id="share" hidden></p>
+<details class="intro"><summary>How to read this</summary>
+<p>Each row is one session recorded on this branch, oldest first. The token columns add up to the bold row. They count what the model calls of a session spent:</p>
+<ul>
+<li><b>new</b>: input that was not cached, plus cache writes</li>
+<li><b>cached</b>: history read from the prompt cache, far cheaper</li>
+<li><b>out</b>: model output</li>
+</ul>
+<p>Click a session to open its diagram and call tree, and click again to close it. Hover over a number for its exact value. Times are in UTC.</p>
+</details>
+<div class="list" id="list"></div>
+<script>
+'use strict';
+const D = /*DATA*/null;
+const SESSION_PAGE = /*TEMPLATE*/null;
+// Written in two parts so that this line is not taken for the slot itself.
+const SESSION_SLOT = '/*DATA*' + '/null';
+const ID_WIDTH = 8;
+const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const count = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : `${n}`);
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const minute = (t) => new Date(t).toISOString().slice(0, 16).replace('T', ' ');
+//   42000 => 42 s    750000 => 13 min    7500000 => 2 h 05 min
+function span(ms) {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s} s`;
+  const m = Math.round(s / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min`;
+}
+const tokenCells = (t) => ['new', 'cached', 'out']
+  .map((k) => `<span class="num tok"${t ? ` title="${t[k]} ${k}"` : ''}>${t ? count(t[k]) : ''}</span>`).join('');
+
+document.title = `Branch ${D.branch}`;
+document.getElementById('name').textContent = D.branch;
+const { summary } = D;
+document.getElementById('subline').textContent = [
+  plural(summary.sessions, 'session'),
+  summary.sessions > 1 ? `${minute(summary.first)} to ${minute(summary.last)} UTC` : `${minute(summary.first)} UTC`,
+].join(' · ');
+if (summary.totals) {
+  const share = document.getElementById('share');
+  share.innerHTML = `<b>${Math.round(summary.cachedShare * 100)}%</b> of the tokens were read from the prompt cache. `
+    + '<span>That is a share of tokens, not of money: a cached token costs a few percent of a new one.</span>';
+  share.hidden = false;
+}
+
+const list = document.getElementById('list');
+list.classList.toggle('bare', !summary.totals);
+list.innerHTML = '<div class="row thead"><span></span><span>start</span><span>session</span><span class="num wide">duration</span><span class="num wide">calls</span>'
+  + '<span class="num wide">contexts</span><span class="num tok">new</span><span class="num tok">cached</span><span class="num tok">out</span></div>'
+  + `<div class="row total"><span></span><span class="what">${plural(summary.sessions, 'session')}</span>${tokenCells(summary.totals)}</div>`
+  + D.sessions.map((s, i) => {
+    const start = minute(s.start);
+    return `<details class="session" data-i="${i}"><summary class="row"><span class="mark">&#9656;</span>`
+      + `<span><span class="yr">${start.slice(0, 5)}</span>${start.slice(5)}</span><span>${esc(s.id.slice(0, ID_WIDTH))}</span>`
+      + `<span class="num wide quiet">${span(s.duration)}</span><span class="num wide quiet">${s.calls}</span><span class="num wide quiet">${s.contexts}</span>`
+      + `${tokenCells(s.totals)}</summary></details>`;
+  }).join('');
+
+// Makes the frame as tall as the session page in it and keeps it so: the page
+// grows when a row opens its detail and reflows when the window changes width.
+function fit(frame) {
+  let page;
+  try { page = frame.contentDocument && frame.contentDocument.documentElement; } catch { page = null; }
+  if (!page) { frame.classList.add('fixed'); return; }
+  page.style.overflowY = 'hidden';
+  const size = () => { frame.style.height = `${Math.ceil(page.getBoundingClientRect().height) + 2}px`; };
+  new frame.contentWindow.ResizeObserver(size).observe(page);
+  size();
+}
+
+// A session is drawn when its row first opens, so a long branch opens as fast as a short one.
+function open(row) {
+  if (row.querySelector('iframe')) return;
+  const session = D.sessions[Number(row.dataset.i)];
+  const frame = document.createElement('iframe');
+  frame.className = 'frame';
+  frame.title = `Session ${session.id.slice(0, ID_WIDTH)}`;
+  frame.addEventListener('load', () => fit(frame));
+  frame.srcdoc = SESSION_PAGE.replace(SESSION_SLOT, () => JSON.stringify(session.data).replace(/</g, '\\u003c'));
+  row.appendChild(frame);
+}
+
+for (const row of list.querySelectorAll('.session')) row.addEventListener('toggle', () => { if (row.open) open(row); });
+</script>
+</body></html>

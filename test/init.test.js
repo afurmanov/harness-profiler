@@ -36,6 +36,7 @@ test('init claude copies the hook and registers it once, keeping other settings'
   assert.ok(fs.statSync(hp).mode & 0o100);
   assert.ok(fs.existsSync(path.join(repo, '.claude', 'harness-profiler', 'hp.js')));
   assert.ok(fs.existsSync(path.join(repo, '.claude', 'harness-profiler', 'view.html')));
+  assert.ok(fs.existsSync(path.join(repo, '.claude', 'harness-profiler', 'branch.html')));
   assert.match(fs.readFileSync(path.join(repo, '.claude', 'skills', 'show-profile', 'SKILL.md'), 'utf8'), /^---\nname: show-profile\n/);
 });
 

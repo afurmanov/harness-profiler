@@ -26,6 +26,8 @@ time     duration             new  cached    out  call
 
 `--verbose` adds every tool call: [tree-verbose.txt](claude/output/tree-verbose.txt). The trace they come from: [trace.jsonl](claude/output/trace.jsonl).
 
+Both recorded sessions ran on `main`, so together they also stand for a branch with two sessions: [branch.html](branch/output/branch.html), shown with the first session open in [branch.png](branch/output/branch.png), and the text form, [tree.txt](branch/output/tree.txt).
+
 ## The harness
 
 Two fixtures, both run by [claude/run.sh](claude/run.sh):
@@ -53,7 +55,7 @@ Both subagents in step 2 are asked for the user's first message. The fresh one s
 ```
 sh e2e/claude/run.sh          # the full fixture, one Claude Code session, about 2 minutes
 sh e2e/claude/run.sh e2e/toy  # the README's example, under a minute
-node e2e/render.js --png      # tree.txt, tree-verbose.txt, trace.html, the PNGs
+node e2e/render.js --png      # tree.txt, tree-verbose.txt, trace.html, the branch page, the PNGs
 node --test                   # checks the features and the outputs
 ```
 

@@ -66,7 +66,7 @@ test('picks the newest session, a session by prefix, or all sessions of a branch
 
   assert.match(tree([], dir), /\n17:21:08 +7 ms \S* +greet \(skill\)/);
   assert.match(tree(['11cf'], dir), /\n16:21:08 +7 ms \S* +greet \(skill\)/);
-  assert.match(tree(['--branch', 'demo'], dir), /^# session 11cf7c7a-26c6-42e2-a845-ec55adc4e67a \(2026-11-09 16:21:03 UTC\)\ntime +duration/);
+  assert.match(tree(['--branch', 'demo'], dir), /^# session 11cf7c7a-26c6-42e2-a845-ec55adc4e67a \(2026-11-09 16:21:03 UTC, \d+ s, \d+ calls, \d+ contexts?\)\ntime +duration/);
   assert.throws(() => tree(['--branch', 'nope'], dir), /No session recorded on branch nope/);
   assert.throws(() => tree(['zzz'], dir), /No session starts with zzz/);
 });
@@ -131,15 +131,9 @@ test('html keeps tool output inert', () => {
   assert.equal(JSON.parse(page.match(/const D = (.*);\n/)[1]).calls.find((c) => c.tool === 'Agent').result, attack);
 });
 
-test('html wants one session', () => {
+test('an unknown format is refused', () => {
   const dir = tempRepo();
   captureFixture('claude-web.jsonl', { dir, times: WEB_RECEIVED_S });
-  captureContexts({ dir });
-  for (const f of fs.readdirSync(path.join(dir, '.harness-profile'))) {
-    const file = path.join(dir, '.harness-profile', f);
-    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/"branch":"demo"/g, '"branch":"same"'));
-  }
-  assert.throws(() => tree(['--branch', 'same', '--format', 'html'], dir), /one session\. Pick one by id prefix:\n {2}11cf7c7a/);
   assert.throws(() => tree(['--format', 'pdf'], dir), /Unknown format pdf/);
 });
 
